@@ -1,19 +1,25 @@
 //+------------------------------------------------------------------+
 //|                                                   StateStore.mqh |
-//|   Master Specification v0.4 sections 4.1, 10 and 11 -            |
+//|   Master Specification v0.4 sections 4.1, 11.2 and 11.3 -        |
 //|   durable state, dual store reconciliation and the fail-closed   |
 //|   exactly-once signal consumption protocol.                      |
 //|                                                                  |
-//|   Stored fields: PeakEquity, DDState, HardStopLatched,           |
-//|   DailyStartEquity, ServerDate, last_signal_id, schema_version,  |
-//|   checksum.                                                      |
+//|   Section 11.2 keys the store on account_login + MagicNumber, so  |
+//|   the account level fields are SHARED by every symbol instance:   |
+//|     PeakEquity, DDState, HardStopLatched, DailyStartEquity,       |
+//|     ServerDate, schema_version, checksum                          |
+//|   (DEV-003 fix: the previous build put the symbol into the key,   |
+//|   which split the drawdown state across instances.)               |
+//|                                                                   |
+//|   The signal consumption ledger (last_signal_id) is inherently    |
+//|   per symbol, because signal_id is symbol + M5 bar open time. It  |
+//|   is stored under account_login + MagicNumber + symbol.           |
 //|                                                                  |
-//|   Two independent stores are written on every flush:             |
-//|     (1) a file in the terminal common folder                     |
-//|     (2) terminal Global Variables                                |
-//|   On disagreement the MORE CONSERVATIVE state is adopted.        |
-//|   If both stores are unrecoverable the EA enters STATE_UNCERTAIN |
-//|   and refuses every new entry.                                   |
+//|   Both records are written to two independent stores on every     |
+//|   flush: a file in the terminal common folder and terminal Global |
+//|   Variables. On disagreement the MORE CONSERVATIVE state is       |
+//|   adopted. If both stores are unrecoverable the EA enters         |
+//|   STATE_UNCERTAIN and refuses every new entry.                    |
 //+------------------------------------------------------------------+
 #ifndef G3_STATESTORE_MQH
 #define G3_STATESTORE_MQH
@@ -22,9 +28,10 @@
 #include "RiskManager.mqh"
 #include "ExitManager.mqh"
 
-#define G3_STATE_SCHEMA_VERSION 1
+#define G3_STATE_SCHEMA_VERSION 2
 #define G3_CHECKSUM_MOD         1000000007
 
+//--- account level record, key = account_login + MagicNumber
 struct G3State
   {
    int               schema_version;
@@ -33,6 +40,13 @@ struct G3State
    bool              hard_stop_latched;
    double            daily_start_equity;
    long              server_date;        // server midnight of the current day
+   double            checksum;
+  };
+
+//--- signal ledger, key = account_login + MagicNumber + symbol
+struct G3SignalState
+  {
+   int               schema_version;
    long              last_signal_time;   // M5 bar open time of the last consumed signal
    string            last_signal_id;
    double            checksum;
@@ -56,7 +70,33 @@ string G3ExtractField(const string record,const string key)
    return(StringSubstr(record,from,end-from));
   }
 
-//--- Canonical record WITHOUT the checksum field.
+//--- Checksum kept inside the exact double range (GV stores doubles).
+double G3StateChecksum(const string record)
+  {
+   ulong h=G3Fnv1a(record);
+   return((double)(h%(ulong)G3_CHECKSUM_MOD));
+  }
+
+void G3StateInit(G3State &s)
+  {
+   s.schema_version=G3_STATE_SCHEMA_VERSION;
+   s.peak_equity=0.0;
+   s.dd_state=G3_DD_NORMAL;
+   s.hard_stop_latched=false;
+   s.daily_start_equity=0.0;
+   s.server_date=0;
+   s.checksum=0.0;
+  }
+
+void G3SignalStateInit(G3SignalState &s)
+  {
+   s.schema_version=G3_STATE_SCHEMA_VERSION;
+   s.last_signal_time=0;
+   s.last_signal_id="";
+   s.checksum=0.0;
+  }
+
+//--- Canonical account record WITHOUT the checksum field.
 string G3StateToRecord(const G3State &s)
   {
    string r="";
@@ -66,16 +106,7 @@ string G3StateToRecord(const G3State &s)
    r=r+"|latch="+IntegerToString(s.hard_stop_latched?1:0);
    r=r+"|dse="+DoubleToString(s.daily_start_equity,2);
    r=r+"|date="+IntegerToString(s.server_date);
-   r=r+"|sigt="+IntegerToString(s.last_signal_time);
-   r=r+"|sigid="+s.last_signal_id;
    return(r);
-  }
-
-//--- Checksum kept inside the exact double range (GV stores doubles).
-double G3StateChecksum(const string record)
-  {
-   ulong h=G3Fnv1a(record);
-   return((double)(h%(ulong)G3_CHECKSUM_MOD));
   }
 
 string G3StateToLine(const G3State &s)
@@ -84,19 +115,44 @@ string G3StateToLine(const G3State &s)
    return(body+"|chk="+DoubleToString(G3StateChecksum(body),0));
   }
 
-//--- Parse and validate a stored line. Returns false on any corruption.
-bool G3ParseStateLine(const string line,G3State &out)
+//--- Canonical signal record WITHOUT the checksum field.
+string G3SignalStateToRecord(const G3SignalState &s)
   {
-   if(StringLen(line)<10)
+   string r="";
+   r=r+"v="+IntegerToString(s.schema_version);
+   r=r+"|sigt="+IntegerToString(s.last_signal_time);
+   r=r+"|sigid="+s.last_signal_id;
+   return(r);
+  }
+
+string G3SignalStateToLine(const G3SignalState &s)
+  {
+   string body=G3SignalStateToRecord(s);
+   return(body+"|chk="+DoubleToString(G3StateChecksum(body),0));
+  }
+
+//--- Split a stored line into its body and its checksum, validating both.
+bool G3SplitCheckedLine(const string line,string &body_out)
+  {
+   body_out="";
+   if(StringLen(line)<8)
       return(false);
    int at=StringFind(line,"|chk=",0);
    if(at<0)
       return(false);
    string body=StringSubstr(line,0,at);
    string chk=StringSubstr(line,at+5);
-   double expect=G3StateChecksum(body);
-   double got=StringToDouble(chk);
-   if(MathAbs(expect-got)>0.5)
+   if(MathAbs(G3StateChecksum(body)-StringToDouble(chk))>0.5)
+      return(false);
+   body_out=body;
+   return(true);
+  }
+
+//--- Parse and validate a stored account record. False on any corruption.
+bool G3ParseStateLine(const string line,G3State &out)
+  {
+   string body="";
+   if(!G3SplitCheckedLine(line,body))
       return(false);
    string v=G3ExtractField(body,"v");
    if(v=="")
@@ -112,38 +168,43 @@ bool G3ParseStateLine(const string line,G3State &out)
    out.hard_stop_latched=(StringToInteger(G3ExtractField(body,"latch"))!=0);
    out.daily_start_equity=StringToDouble(G3ExtractField(body,"dse"));
    out.server_date=(long)StringToInteger(G3ExtractField(body,"date"));
-   out.last_signal_time=(long)StringToInteger(G3ExtractField(body,"sigt"));
-   out.last_signal_id=G3ExtractField(body,"sigid");
-   out.checksum=expect;
+   out.checksum=G3StateChecksum(body);
    if(out.peak_equity<0.0 || out.daily_start_equity<0.0)
       return(false);
    return(true);
   }
 
-void G3StateInit(G3State &s)
+//--- Parse and validate a stored signal ledger record.
+bool G3ParseSignalStateLine(const string line,G3SignalState &out)
   {
-   s.schema_version=G3_STATE_SCHEMA_VERSION;
-   s.peak_equity=0.0;
-   s.dd_state=G3_DD_NORMAL;
-   s.hard_stop_latched=false;
-   s.daily_start_equity=0.0;
-   s.server_date=0;
-   s.last_signal_time=0;
-   s.last_signal_id="";
-   s.checksum=0.0;
+   string body="";
+   if(!G3SplitCheckedLine(line,body))
+      return(false);
+   string v=G3ExtractField(body,"v");
+   if(v=="")
+      return(false);
+   out.schema_version=(int)StringToInteger(v);
+   if(out.schema_version!=G3_STATE_SCHEMA_VERSION)
+      return(false);
+   out.last_signal_time=(long)StringToInteger(G3ExtractField(body,"sigt"));
+   out.last_signal_id=G3ExtractField(body,"sigid");
+   out.checksum=G3StateChecksum(body);
+   if(out.last_signal_time<0)
+      return(false);
+   return(true);
   }
 
 //+------------------------------------------------------------------+
 //| PURE - dual store reconciliation                                 |
 //+------------------------------------------------------------------+
 
-//--- Conservative merge of two recovered states:
-//---   dd_state          -> the more severe one
-//---   hard_stop_latched -> logical OR
-//---   peak_equity       -> the higher peak (implies the deeper DD)
-//---   daily_start_equity-> the higher value (locks earlier)
-//---   server_date       -> the later date
-//---   last_signal_*     -> the later consumed signal (never re-arm)
+//--- Conservative merge of two recovered account records (section 11.2:
+//--- "より保守的なstate（高いPeak、厳しいDD state、HardStop=trueを優先）"):
+//---   peak_equity        -> the higher peak (implies the deeper DD)
+//---   dd_state           -> the more severe one
+//---   hard_stop_latched  -> logical OR
+//---   daily_start_equity -> the higher value (locks earlier)
+//---   server_date        -> the later date
 G3State G3MergeConservative(const G3State &a,const G3State &b)
   {
    G3State o=a;
@@ -153,16 +214,24 @@ G3State G3MergeConservative(const G3State &a,const G3State &b)
    o.daily_start_equity=(a.daily_start_equity>=b.daily_start_equity)
                         ?a.daily_start_equity:b.daily_start_equity;
    o.server_date=(a.server_date>=b.server_date)?a.server_date:b.server_date;
+   o.checksum=G3StateChecksum(G3StateToRecord(o));
+   return(o);
+  }
+
+//--- Conservative merge of two signal ledgers: never re-arm a signal.
+G3SignalState G3MergeSignalConservative(const G3SignalState &a,const G3SignalState &b)
+  {
+   G3SignalState o=a;
    if(b.last_signal_time>a.last_signal_time)
      {
       o.last_signal_time=b.last_signal_time;
       o.last_signal_id=b.last_signal_id;
      }
-   o.checksum=G3StateChecksum(G3StateToRecord(o));
+   o.checksum=G3StateChecksum(G3SignalStateToRecord(o));
    return(o);
   }
 
-//--- Decide the effective state from the two stores.
+//--- Decide the effective account state from the two stores.
 ENUM_G3_STORE_STATUS G3ReconcileStores(const bool file_ok,const G3State &file_state,
                                        const bool gv_ok,const G3State &gv_state,
                                        const bool anything_stored,
@@ -170,9 +239,7 @@ ENUM_G3_STORE_STATUS G3ReconcileStores(const bool file_ok,const G3State &file_st
   {
    if(file_ok && gv_ok)
      {
-      string rf=G3StateToRecord(file_state);
-      string rg=G3StateToRecord(gv_state);
-      if(rf==rg)
+      if(G3StateToRecord(file_state)==G3StateToRecord(gv_state))
         {
          out=file_state;
          return(G3_STORE_OK);
@@ -200,16 +267,45 @@ ENUM_G3_STORE_STATUS G3ReconcileStores(const bool file_ok,const G3State &file_st
    return(G3_STORE_BOTH_LOST);
   }
 
+//--- Decide the effective signal ledger from the two stores.
+ENUM_G3_STORE_STATUS G3ReconcileSignalStores(const bool file_ok,const G3SignalState &file_state,
+                                             const bool gv_ok,const G3SignalState &gv_state,
+                                             const bool anything_stored,
+                                             G3SignalState &out)
+  {
+   if(file_ok && gv_ok)
+     {
+      if(G3SignalStateToRecord(file_state)==G3SignalStateToRecord(gv_state))
+        {
+         out=file_state;
+         return(G3_STORE_OK);
+        }
+      out=G3MergeSignalConservative(file_state,gv_state);
+      return(G3_STORE_MISMATCH);
+     }
+   if(file_ok)
+     {
+      out=file_state;
+      return(G3_STORE_FILE_ONLY);
+     }
+   if(gv_ok)
+     {
+      out=gv_state;
+      return(G3_STORE_GV_ONLY);
+     }
+   G3SignalStateInit(out);
+   return(anything_stored?G3_STORE_BOTH_LOST:G3_STORE_FRESH);
+  }
+
 //--- Exactly-once guard: a signal whose M5 bar time is not newer than
 //--- the last consumed one is refused (fail closed).
-bool G3SignalAlreadyConsumed(const G3State &s,const string signal_id,
+bool G3SignalAlreadyConsumed(const G3SignalState &s,const string signal_id,
                              const long m5_bar_time)
   {
    if(s.last_signal_id==signal_id)
       return(true);
    return(m5_bar_time<=s.last_signal_time);
   }
-
 
 //+------------------------------------------------------------------+
 //| TERMINAL (excluded from the host test harness)                   |
@@ -222,58 +318,70 @@ struct G3StoreContext
   {
    string            symbol;
    long              magic;
+   //--- account level (account_login + magic)
    string            state_file;
    string            state_tmp;
+   string            state_gv;
+   //--- per symbol signal ledger (account_login + magic + symbol)
+   string            signal_file;
+   string            signal_tmp;
+   string            signal_gv;
+   //--- per symbol runtime position tracking
    string            trade_file;
    string            trade_tmp;
    string            audit_file;
-   string            gv_prefix;
    string            lock_name;
   };
 
 void G3StoreContextInit(G3StoreContext &ctx,const string symbol,const long magic)
   {
    long account=AccountInfoInteger(ACCOUNT_LOGIN);
-   string tag=IntegerToString(account)+"_"+IntegerToString(magic);
-   ctx.symbol    =symbol;
-   ctx.magic     =magic;
-   ctx.state_file=G3_STORE_FOLDER+"\\state_"+tag+"_"+symbol+".txt";
-   ctx.state_tmp =G3_STORE_FOLDER+"\\state_"+tag+"_"+symbol+".tmp";
-   ctx.trade_file=G3_STORE_FOLDER+"\\trades_"+tag+"_"+symbol+".csv";
-   ctx.trade_tmp =G3_STORE_FOLDER+"\\trades_"+tag+"_"+symbol+".tmp";
-   ctx.audit_file=G3_STORE_FOLDER+"\\audit_"+tag+".log";
-   ctx.gv_prefix ="G3_"+IntegerToString(magic)+"_"+symbol+"_";
-   ctx.lock_name ="G3LOCK_"+IntegerToString(magic);
+   string acc=IntegerToString(account);
+   string mag=IntegerToString(magic);
+   string tag=acc+"_"+mag;
+   ctx.symbol     =symbol;
+   ctx.magic      =magic;
+   ctx.state_file =G3_STORE_FOLDER+"\\state_"+tag+".txt";
+   ctx.state_tmp  =G3_STORE_FOLDER+"\\state_"+tag+".tmp";
+   ctx.state_gv   ="G3_"+mag+"_";
+   ctx.signal_file=G3_STORE_FOLDER+"\\signal_"+tag+"_"+symbol+".txt";
+   ctx.signal_tmp =G3_STORE_FOLDER+"\\signal_"+tag+"_"+symbol+".tmp";
+   ctx.signal_gv  ="G3S_"+mag+"_"+symbol+"_";
+   ctx.trade_file =G3_STORE_FOLDER+"\\trades_"+tag+"_"+symbol+".csv";
+   ctx.trade_tmp  =G3_STORE_FOLDER+"\\trades_"+tag+"_"+symbol+".tmp";
+   ctx.audit_file =G3_STORE_FOLDER+"\\audit_"+tag+".log";
+   ctx.lock_name  ="G3LOCK_"+mag;
   }
 
 //+------------------------------------------------------------------+
 //| File store                                                       |
 //+------------------------------------------------------------------+
-bool G3WriteStateFile(const G3StoreContext &ctx,const G3State &s)
+bool G3WriteLineFile(const string tmp_path,const string final_path,const string line)
   {
-   int h=FileOpen(ctx.state_tmp,FILE_WRITE|FILE_TXT|FILE_ANSI|FILE_COMMON);
+   int h=FileOpen(tmp_path,FILE_WRITE|FILE_TXT|FILE_ANSI|FILE_COMMON);
    if(h==INVALID_HANDLE)
       return(false);
-   FileWriteString(h,G3StateToLine(s)+"\r\n");
+   FileWriteString(h,line+"\r\n");
    FileFlush(h);
    FileClose(h);
    //--- atomic-ish publish: replace the primary file with the temp file
-   if(FileIsExist(ctx.state_file,FILE_COMMON))
-      FileDelete(ctx.state_file,FILE_COMMON);
-   return(FileMove(ctx.state_tmp,FILE_COMMON,ctx.state_file,FILE_REWRITE|FILE_COMMON));
+   if(FileIsExist(final_path,FILE_COMMON))
+      FileDelete(final_path,FILE_COMMON);
+   return(FileMove(tmp_path,FILE_COMMON,final_path,FILE_REWRITE|FILE_COMMON));
   }
 
-bool G3ReadStateFile(const G3StoreContext &ctx,G3State &s,bool &existed)
+bool G3ReadLineFile(const string path,string &line_out,bool &existed)
   {
-   existed=FileIsExist(ctx.state_file,FILE_COMMON);
+   line_out="";
+   existed=FileIsExist(path,FILE_COMMON);
    if(!existed)
       return(false);
-   int h=FileOpen(ctx.state_file,FILE_READ|FILE_TXT|FILE_ANSI|FILE_COMMON);
+   int h=FileOpen(path,FILE_READ|FILE_TXT|FILE_ANSI|FILE_COMMON);
    if(h==INVALID_HANDLE)
       return(false);
-   string line=FileReadString(h);
+   line_out=FileReadString(h);
    FileClose(h);
-   return(G3ParseStateLine(line,s));
+   return(true);
   }
 
 //+------------------------------------------------------------------+
@@ -283,41 +391,69 @@ bool G3WriteStateGV(const G3StoreContext &ctx,const G3State &s)
   {
    string body=G3StateToRecord(s);
    bool ok=true;
-   ok=ok && GlobalVariableSet(ctx.gv_prefix+"V",(double)s.schema_version)>0;
-   ok=ok && GlobalVariableSet(ctx.gv_prefix+"PEAK",s.peak_equity)>0;
-   ok=ok && GlobalVariableSet(ctx.gv_prefix+"DD",(double)s.dd_state)>0;
-   ok=ok && GlobalVariableSet(ctx.gv_prefix+"LATCH",s.hard_stop_latched?1.0:0.0)>0;
-   ok=ok && GlobalVariableSet(ctx.gv_prefix+"DSE",s.daily_start_equity)>0;
-   ok=ok && GlobalVariableSet(ctx.gv_prefix+"DATE",(double)s.server_date)>0;
-   ok=ok && GlobalVariableSet(ctx.gv_prefix+"SIGT",(double)s.last_signal_time)>0;
-   ok=ok && GlobalVariableSet(ctx.gv_prefix+"CHK",G3StateChecksum(body))>0;
+   ok=ok && GlobalVariableSet(ctx.state_gv+"V",(double)s.schema_version)>0;
+   ok=ok && GlobalVariableSet(ctx.state_gv+"PEAK",s.peak_equity)>0;
+   ok=ok && GlobalVariableSet(ctx.state_gv+"DD",(double)s.dd_state)>0;
+   ok=ok && GlobalVariableSet(ctx.state_gv+"LATCH",s.hard_stop_latched?1.0:0.0)>0;
+   ok=ok && GlobalVariableSet(ctx.state_gv+"DSE",s.daily_start_equity)>0;
+   ok=ok && GlobalVariableSet(ctx.state_gv+"DATE",(double)s.server_date)>0;
+   ok=ok && GlobalVariableSet(ctx.state_gv+"CHK",G3StateChecksum(body))>0;
    return(ok);
   }
 
 bool G3ReadStateGV(const G3StoreContext &ctx,G3State &s,bool &existed)
   {
-   existed=GlobalVariableCheck(ctx.gv_prefix+"CHK");
+   existed=GlobalVariableCheck(ctx.state_gv+"CHK");
    if(!existed)
       return(false);
    G3StateInit(s);
-   if(!GlobalVariableCheck(ctx.gv_prefix+"V"))
+   if(!GlobalVariableCheck(ctx.state_gv+"V"))
       return(false);
-   s.schema_version=(int)GlobalVariableGet(ctx.gv_prefix+"V");
+   s.schema_version=(int)GlobalVariableGet(ctx.state_gv+"V");
    if(s.schema_version!=G3_STATE_SCHEMA_VERSION)
       return(false);
-   s.peak_equity=GlobalVariableGet(ctx.gv_prefix+"PEAK");
-   int dd=(int)GlobalVariableGet(ctx.gv_prefix+"DD");
+   s.peak_equity=GlobalVariableGet(ctx.state_gv+"PEAK");
+   int dd=(int)GlobalVariableGet(ctx.state_gv+"DD");
    if(dd<0 || dd>4)
       return(false);
    s.dd_state=(ENUM_G3_DD_STATE)dd;
-   s.hard_stop_latched=(GlobalVariableGet(ctx.gv_prefix+"LATCH")!=0.0);
-   s.daily_start_equity=GlobalVariableGet(ctx.gv_prefix+"DSE");
-   s.server_date=(long)GlobalVariableGet(ctx.gv_prefix+"DATE");
-   s.last_signal_time=(long)GlobalVariableGet(ctx.gv_prefix+"SIGT");
+   s.hard_stop_latched=(GlobalVariableGet(ctx.state_gv+"LATCH")!=0.0);
+   s.daily_start_equity=GlobalVariableGet(ctx.state_gv+"DSE");
+   s.server_date=(long)GlobalVariableGet(ctx.state_gv+"DATE");
+   double stored=GlobalVariableGet(ctx.state_gv+"CHK");
+   double expect=G3StateChecksum(G3StateToRecord(s));
+   if(MathAbs(stored-expect)>0.5)
+      return(false);
+   s.checksum=expect;
+   return(true);
+  }
+
+bool G3WriteSignalGV(const G3StoreContext &ctx,const G3SignalState &s)
+  {
+   string body=G3SignalStateToRecord(s);
+   bool ok=true;
+   ok=ok && GlobalVariableSet(ctx.signal_gv+"V",(double)s.schema_version)>0;
+   ok=ok && GlobalVariableSet(ctx.signal_gv+"SIGT",(double)s.last_signal_time)>0;
+   ok=ok && GlobalVariableSet(ctx.signal_gv+"CHK",G3StateChecksum(body))>0;
+   return(ok);
+  }
+
+bool G3ReadSignalGV(const G3StoreContext &ctx,G3SignalState &s,bool &existed)
+  {
+   existed=GlobalVariableCheck(ctx.signal_gv+"CHK");
+   if(!existed)
+      return(false);
+   G3SignalStateInit(s);
+   if(!GlobalVariableCheck(ctx.signal_gv+"V"))
+      return(false);
+   s.schema_version=(int)GlobalVariableGet(ctx.signal_gv+"V");
+   if(s.schema_version!=G3_STATE_SCHEMA_VERSION)
+      return(false);
+   s.last_signal_time=(long)GlobalVariableGet(ctx.signal_gv+"SIGT");
    s.last_signal_id=(s.last_signal_time>0)
                     ?(ctx.symbol+"#"+IntegerToString(s.last_signal_time)):"";
-   double stored=GlobalVariableGet(ctx.gv_prefix+"CHK");
-   double expect=G3StateChecksum(G3StateToRecord(s));
+   double stored=GlobalVariableGet(ctx.signal_gv+"CHK");
+   double expect=G3StateChecksum(G3SignalStateToRecord(s));
    if(MathAbs(stored-expect)>0.5)
       return(false);
    s.checksum=expect;
@@ -332,21 +468,55 @@ ENUM_G3_STORE_STATUS G3LoadState(const G3StoreContext &ctx,G3State &out)
    G3State fs,gs;
    G3StateInit(fs);
    G3StateInit(gs);
+   string line="";
    bool f_existed=false,g_existed=false;
-   bool f_ok=G3ReadStateFile(ctx,fs,f_existed);
+   bool f_ok=(G3ReadLineFile(ctx.state_file,line,f_existed) && G3ParseStateLine(line,fs));
    bool g_ok=G3ReadStateGV(ctx,gs,g_existed);
    return(G3ReconcileStores(f_ok,fs,g_ok,gs,(f_existed||g_existed),out));
   }
 
-//--- Flush to BOTH stores. Returns false if either store failed, which
-//--- the caller treats as fail-closed (no new entry is evaluated).
+//--- Flush the account record to BOTH stores.
 bool G3PersistState(const G3StoreContext &ctx,G3State &s)
   {
    s.schema_version=G3_STATE_SCHEMA_VERSION;
    s.checksum=G3StateChecksum(G3StateToRecord(s));
-   bool f=G3WriteStateFile(ctx,s);
+   bool f=G3WriteLineFile(ctx.state_tmp,ctx.state_file,G3StateToLine(s));
    bool g=G3WriteStateGV(ctx,s);
    return(f && g);
+  }
+
+ENUM_G3_STORE_STATUS G3LoadSignalState(const G3StoreContext &ctx,G3SignalState &out)
+  {
+   G3SignalState fs,gs;
+   G3SignalStateInit(fs);
+   G3SignalStateInit(gs);
+   string line="";
+   bool f_existed=false,g_existed=false;
+   bool f_ok=(G3ReadLineFile(ctx.signal_file,line,f_existed) && G3ParseSignalStateLine(line,fs));
+   bool g_ok=G3ReadSignalGV(ctx,gs,g_existed);
+   return(G3ReconcileSignalStores(f_ok,fs,g_ok,gs,(f_existed||g_existed),out));
+  }
+
+bool G3PersistSignalState(const G3StoreContext &ctx,G3SignalState &s)
+  {
+   s.schema_version=G3_STATE_SCHEMA_VERSION;
+   s.checksum=G3StateChecksum(G3SignalStateToRecord(s));
+   bool f=G3WriteLineFile(ctx.signal_tmp,ctx.signal_file,G3SignalStateToLine(s));
+   bool g=G3WriteSignalGV(ctx,s);
+   return(f && g);
+  }
+
+//--- Adopt the account record another instance may have advanced.
+//--- The caller holds the portfolio lock. The merge is conservative, and
+//--- the drawdown transition is re-evaluated by the caller afterwards.
+void G3RefreshSharedState(const G3StoreContext &ctx,G3State &s)
+  {
+   G3State gv;
+   G3StateInit(gv);
+   bool existed=false;
+   if(!G3ReadStateGV(ctx,gv,existed))
+      return;
+   s=G3MergeConservative(s,gv);
   }
 
 //--- Atomic consume of a signal_id.
@@ -355,7 +525,7 @@ bool G3PersistState(const G3StoreContext &ctx,G3State &s)
 //---   2. atomic consume
 //---   3. flush to file + global variables
 //---   4. only then evaluate the signal
-bool G3ConsumeSignal(const G3StoreContext &ctx,G3State &s,const string signal_id,
+bool G3ConsumeSignal(const G3StoreContext &ctx,G3SignalState &s,const string signal_id,
                      const long m5_bar_time,ENUM_G3_REASON &reason_out)
   {
    reason_out=G3_R_NONE;
@@ -368,7 +538,7 @@ bool G3ConsumeSignal(const G3StoreContext &ctx,G3State &s,const string signal_id
    string prev_id=s.last_signal_id;
    s.last_signal_time=m5_bar_time;
    s.last_signal_id=signal_id;
-   if(!G3PersistState(ctx,s))
+   if(!G3PersistSignalState(ctx,s))
      {
       //--- fail closed: the consume could not be made durable, so the
       //--- opportunity is dropped rather than risking a duplicate.
@@ -536,7 +706,9 @@ int G3LoadTradeStates(const G3StoreContext &ctx,G3TradeState &states[],const int
   }
 
 //+------------------------------------------------------------------+
-//| Cross-instance portfolio lock (terminal global variable)         |
+//| Cross-instance lock (terminal global variable)                   |
+//| Serialises both the shared account record update and the         |
+//| portfolio admission check across symbol instances.               |
 //+------------------------------------------------------------------+
 bool G3PortfolioLock(const G3StoreContext &ctx,const int timeout_ms)
   {

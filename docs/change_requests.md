@@ -4,6 +4,10 @@
 (Master Specification v0.4, G2 Re-Audit Report v0.4, G3研究開始記録).
 Evidence and full reasoning: `docs/G4_reconciliation_report.md`.
 
+**Patched 2026-09-22** — DEV-001, DEV-002, DEV-003, DEV-004, DEV-008 and
+DEV-009..DEV-013, DEV-015, DEV-016 are now **FIXED** in the source; see
+`docs/G4_patch_report.md` and section H below.
+
 Severity: **BLOCKER** stops G3 numbers from being citable. **HIGH** changes
 results materially. **MEDIUM** changes results in identifiable cases.
 **LOW** is a clarification.
@@ -17,16 +21,12 @@ results materially. **MEDIUM** changes results in identifiable cases.
 | ISSUE-016 / CR-014 | The section 21 compile gate (MetaEditor, 0 errors / 0 warnings) has not been executed; the 29 integration cases have not been run. | No MQL5 toolchain in this environment. Held open by instruction. |
 | ISSUE-012 / CR-009 | Primary tick feed, second independent feed, symbol specifications, initial equity, account currency and cost information are not supplied (spec 13.1). | Not received. The G3 start record states the same gap. Held open by instruction. |
 | ISSUE-013 / CR-008 | No fixed data split exists for a 61-71 month dataset. Spec 13.2 defines only the 72 month case and the "60 months only" fallback. | The G3 start record states explicitly: "61〜71か月…の固定分割はv0.4に明示されていない。分割を推測して研究を開始しない。G1への仕様照会又はCRの対象として保留する". Held open by instruction. |
-| **DEV-001** | Spec 6 requires the M15 pullback band to use the **ATR of the same shift** ("各Low/Highは同じshiftのEMA20/ATRと比較"). The implementation applies the shift-1 ATR to all three shifts. | Conformance defect found by this reconciliation. Affects m15_score and therefore every entry decision. Not fixed: this turn was scoped to reconciliation only. |
-| **DEV-002** | Spec 4.2 / 15.1 / appendix A require a post-gap cooldown: after a higher-timeframe gap of more than twice the normal period, the first completed H4 bar must produce no new signal. Gap detection is a TimeSync responsibility. | Not implemented at all. Spec 14.2 lists an implementation that differs from the specification as an automatic FAIL. |
-| **DEV-003** | Spec 11.2 keys the StateStore on **account_login + MagicNumber**. The implementation adds the symbol to the key, so PeakEquity / DDState / DailyStartEquity are not shared between the per-symbol instances. | The account-level DD state machine and DailyEntryLock therefore do not behave as specified. Spec 14.2 makes a non-functioning DD Hard Stop or DailyEntryLock an automatic FAIL. |
 
 ## B. Open HIGH
 
 | id | issue | note |
 |----|-------|------|
 | ISSUE-003 / CR-003 | The MT5 strategy tester runs exactly one expert, so the portfolio rules of spec 11.4 cannot be produced in a backtest with one instance per symbol. | Held open by instruction. Options (a) single-instance multi-symbol research mode, (b) offline portfolio replay of the EVAL/ENTRY/EXIT logs, (c) forward/live only. The implementation does not choose. |
-| **DEV-004** | Spec 10.2 defines the cost-adjusted BE as the price where P/L after "既発生commission + swap + 推定exit commission" is >= 0, and states that the **spread must not be added** because it is already contained in the Ask/Bid execution relationship. The implementation adds the spread and ignores swap and actual commission history. | Affects ExitMode B only. |
 | **DEV-005** / CR-006R | Spec 16 registers 41 parameters with a provenance class; every H-class parameter requires OAT sensitivity (13.4), and spec 14.1 fails G3 if any registered OAT parameter or test is unreported. The EA exposes three inputs; RESTRICTED ScoreThreshold (16: baseline 6, OAT 5/6/7) and Deviation Hard Cap (9.3 / 16: 1.0/2.0/3.0 pips) are compile-time constants. | The execution method must be decided by G1/G2: EA inputs, or one build per OAT point. 13.4 forbids a brute-force grid, so simply exposing 30 inputs is not automatically correct. |
 | **DEV-006** / CR-015 | Spec 13.5 and the G3 start record define execution stress as a spread **multiplier** (x1.5 / x2.0 / x3.0) plus adverse slippage of 0.25 / 0.50 / 1.00 x observed spread on entry and exit. The EA offers an absolute extra-spread input and no slippage model. | Spec 14.1 requires Expectancy_R > 0 under Stress-1, which cannot currently be evaluated. |
 
@@ -35,21 +35,30 @@ results materially. **MEDIUM** changes results in identifiable cases.
 | id | issue |
 |----|-------|
 | **DEV-007** / CR-016 | Spec 12 defines `fakeout_3 / fakeout_6` as "breakout後3/6本以内反転SL等の診断flag" and 7.2 refers to the reversal-SL rate within 3/6 bars after entry. The EA emits `NA_SPEC_UNDEFINED`. The residual ambiguity is whether "反転SL等" covers only an SL fill, and whether the origin is entry or breakout — hence CR-016. Spec 13.6 and the G3 start record require a fakeout subgroup analysis. |
-| **DEV-008** | Spec 9.2 requires a commission estimate to be added to pre-trade risk when available. Not implemented. |
 
 ## D. Open LOW
 
 | id | issue |
 |----|-------|
-| DEV-009 | `state_store_status` uses six values; spec 12 names `OK / RECOVERED / UNCERTAIN`. A mapping is needed. |
-| DEV-010 | Spec 9.1 names `sl_raw_distance` and `sl_final_distance`; the log stores prices (distances are derivable). |
-| DEV-011 | Spec 9.2 asks for `SYMBOL_TRADE_TICK_VALUE_PROFIT/LOSS` to be recorded for cross-checking. Not logged. |
-| DEV-012 | Spec 15.4 requires protection against a double daily reset when the server clock moves backwards. The implementation resets on any date change. |
-| DEV-013 | The correlation window uses 61 complete D1 bars to form 60 returns; spec 11.4 says "直近60 complete bars". The implementation is one bar more conservative. |
-| DEV-014 | Appendix A returns before `manage_open_positions()` under STATE_UNCERTAIN; the implementation follows 11.2 and keeps managing open positions while refusing new entries. Which reading governs should be confirmed. |
-| DEV-015 | The skip_reason precedence differs from appendix A (H4 score minimum is evaluated before the breakout gate). The accept/reject outcome is identical; only log attribution differs. |
-| DEV-016 | Log column naming differs from spec 12 (`order_calc_profit_1lot` vs `risk_1lot_calc`, `corr_state` vs `corr_unavailable`, the `f_` prefix on feature flags). |
+| DEV-014 | Appendix A returns before `manage_open_positions()` under STATE_UNCERTAIN; the implementation follows 11.2 and keeps managing open positions while refusing new entries. Not uniquely determined by the text, so it was left unchanged; which reading governs should be confirmed. |
 | DEV-017 | Spec 11.2 requires manual recovery from STATE_UNCERTAIN but does not give the procedure. The implementation never resumes automatically, which satisfies 14.2. |
+
+## H. FIXED in the source (see `docs/G4_patch_report.md`)
+
+| id | old severity | fix |
+|----|--------------|-----|
+| DEV-001 | BLOCKER | `M15Input.atr14[3]`; each shift is tested against its own ATR14 (spec 6). Regression R-001a..d. |
+| DEV-002 | BLOCKER | `G3IsPostGapBar()` in TimeSync; the first H4 bar completed after a gap of more than twice the period issues no signal (`POST_GAP_COOLDOWN`), and `post_gap` is logged for the 13.6 subgroup. Regression R-002a..f. |
+| DEV-003 | BLOCKER | The account record is keyed on account_login + MagicNumber and shared by all symbol instances; the signal ledger is a separate per-symbol record. Updates are serialised under the cross-instance lock. Regression R-003a..g. |
+| DEV-004 | HIGH | Break-even cost = incurred commission + swap + estimated exit commission; the spread is no longer added (spec 10.2). Regression R-004a..f. |
+| DEV-008 | MEDIUM | `CommissionPerLotRoundTurn()` is added to pre-trade risk (spec 9.2) and logged as `commission_per_lot_est`. |
+| DEV-009 | LOW | `state_store_status` now carries OK / RECOVERED / UNCERTAIN; the internal value moved to `state_store_detail`. Regression R-006, R-007j/k. |
+| DEV-010 | LOW | `sl_raw_distance` and `sl_final_distance` columns added. Regression R-007c. |
+| DEV-011 | LOW | `tick_value_profit` / `tick_value_loss` columns added. Regression R-007d. |
+| DEV-012 | LOW | The daily reset triggers only on a forward server-date change (spec 15.4). |
+| DEV-013 | LOW | The correlation window is 60 complete D1 bars (59 log returns), so exactly 60 bars is READY. Regression R-005a/b. |
+| DEV-015 | LOW | The evaluation order now follows appendix A: direction, breakout gate, scores, minimums and threshold, then the volatility / spread hard filters. |
+| DEV-016 | LOW | Log column names follow spec 12. Regression R-007a..h. |
 
 ---
 

@@ -10,7 +10,7 @@ The build uses `-Wall -Wextra -Werror`.
 Terminal-bound behaviour is **not** in scope here; see
 `tests/integration_test_plan.md`.
 
-Total assertions: **142**.
+Total assertions: **179**.
 
 ## test_time_sync
 
@@ -33,6 +33,7 @@ Specification: 10 StateStore, dual store reconciliation, exactly-once consume
 | test id | assertion |
 |---------|-----------|
 | `T-006` | test_state_roundtrip_after_restart |
+| `R-003a` | test_account_record_has_no_signal_field |
 | `T-007` | test_corrupt_primary_store_fails_safe |
 | `T-007b` | test_truncated_record_rejected |
 | `T-007c` | test_wrong_schema_version_rejected |
@@ -43,6 +44,20 @@ Specification: 10 StateStore, dual store reconciliation, exactly-once consume
 | `T-010b` | test_stores_agree |
 | `T-010c` | test_file_only |
 | `T-010d` | test_gv_only |
+| `R-006` | test_store_status_spec_values |
+
+## test_signal_ledger
+
+Specification: 4.1 per-symbol signal ledger, exactly-once consume (DEV-003)
+
+| test id | assertion |
+|---------|-----------|
+| `R-003b` | test_signal_ledger_roundtrip |
+| `R-003c` | test_signal_ledger_corrupt_rejected |
+| `R-003d` | test_signal_ledger_merge_takes_later |
+| `R-003e` | test_signal_ledger_merge_keeps_later |
+| `R-003f` | test_signal_store_mismatch_conservative |
+| `R-003g` | test_signal_store_fresh |
 | `T-005` | test_signal_id_duplicate_rejected |
 | `T-005b` | test_older_signal_rejected |
 | `T-005c` | test_new_signal_accepted |
@@ -216,3 +231,39 @@ Specification: 16 research log schema integrity
 | `T-047c` | test_fakeout_columns_marked_undefined |
 | `T-047d` | test_reason_code_text |
 | `T-047e` | test_side_text |
+
+## test_dev_regressions
+
+Specification: regression cover for the conformance fixes DEV-001, 002, 004, 009-016
+
+| test id | assertion |
+|---------|-----------|
+| `R-001a` | test_m15_pullback_uses_shift3_atr |
+| `R-001b` | test_m15_pullback_does_not_borrow_shift1_atr |
+| `R-001c` | test_m15_zero_atr_on_one_shift |
+| `R-001d` | test_m15_pullback_sell_uses_same_shift_atr |
+| `R-002a` | test_no_gap_on_normal_spacing |
+| `R-002b` | test_gap_detected_beyond_two_periods |
+| `R-002c` | test_bar_after_the_post_gap_bar_is_clean |
+| `R-002d` | test_exactly_two_periods_is_not_a_gap |
+| `R-002e` | test_gap_unknown_without_neighbour |
+| `R-002f` | test_gap_rejects_bad_arguments |
+| `R-004a` | test_be_cost_sums_commission_and_swap |
+| `R-004b` | test_be_cost_positive_swap_offsets |
+| `R-004c` | test_be_cost_net_credit_is_zero |
+| `R-004d` | test_be_cost_zero_when_no_costs |
+| `R-004e` | test_be_price_uses_cost_only |
+| `R-004f` | test_be_price_zero_cost_is_entry |
+| `R-005a` | test_correlation_window_is_60_bars |
+| `R-005b` | test_pearson_over_59_returns |
+| `R-007a` | test_log_uses_spec_feature_flag_names |
+| `R-007b` | test_log_has_post_gap_column |
+| `R-007c` | test_log_has_sl_distance_columns |
+| `R-007d` | test_log_has_tick_value_columns |
+| `R-007e` | test_log_uses_spec_risk_field_name |
+| `R-007f` | test_log_has_corr_unavailable |
+| `R-007g` | test_log_uses_spec_stop_level_name |
+| `R-007h` | test_log_has_commission_estimate |
+| `R-007i` | test_log_row_matches_header_after_changes |
+| `R-007j` | test_log_row_carries_spec_store_status |
+| `R-007k` | test_log_row_keeps_store_detail |

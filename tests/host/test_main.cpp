@@ -108,8 +108,6 @@ static void test_state_store()
    s.hard_stop_latched=false;
    s.daily_start_equity=9800.0;
    s.server_date=1700000000;
-   s.last_signal_time=1700003000;
-   s.last_signal_id="EURUSD#1700003000";
 
    string line=G3StateToLine(s);
 
@@ -121,9 +119,12 @@ static void test_state_store()
          ok && Near(back.peak_equity,10000.0,1e-6)
          && back.dd_state==G3_DD_MODERATE
          && Near(back.daily_start_equity,9800.0,1e-6)
-         && back.server_date==1700000000
-         && back.last_signal_time==1700003000
-         && back.last_signal_id==string("EURUSD#1700003000"));
+         && back.server_date==1700000000);
+
+   //--- DEV-003: the account record carries no symbol scoped field
+   CHECK("R-003a test_account_record_has_no_signal_field",
+         StringFind(G3StateToRecord(s),"sigid",0)<0
+         && StringFind(G3StateToRecord(s),"sigt",0)<0);
 
    //--- T-007 a corrupted file record is rejected, never half-loaded
    string corrupt=line;
@@ -133,9 +134,9 @@ static void test_state_store()
    CHECK("T-007 test_corrupt_primary_store_fails_safe",
          !G3ParseStateLine(corrupt,bad));
    CHECK("T-007b test_truncated_record_rejected",
-         !G3ParseStateLine("v=1|peak=100",bad));
+         !G3ParseStateLine("v=2|peak=100",bad));
    CHECK("T-007c test_wrong_schema_version_rejected",
-         !G3ParseStateLine("v=99|peak=1.00|dd=0|latch=0|dse=1.00|date=0|sigt=0|sigid=|chk=0",bad));
+         !G3ParseStateLine("v=99|peak=1.00|dd=0|latch=0|dse=1.00|date=0|chk=0",bad));
 
    //--- T-008 a tampered global-variable store fails its checksum
    G3State gv=s;
@@ -163,23 +164,18 @@ static void test_state_store()
    a.hard_stop_latched=false;
    a.peak_equity=10000.0;
    a.daily_start_equity=9000.0;
-   a.last_signal_time=1700003000;
-   a.last_signal_id="EURUSD#1700003000";
    G3State b=s;
    b.dd_state=G3_DD_RESTRICTED;
    b.hard_stop_latched=true;
    b.peak_equity=11000.0;
    b.daily_start_equity=9500.0;
-   b.last_signal_time=1700003300;
-   b.last_signal_id="EURUSD#1700003300";
    st=G3ReconcileStores(true,a,true,b,true,out);
    CHECK("T-010 test_store_mismatch_conservative",
          st==G3_STORE_MISMATCH
          && out.dd_state==G3_DD_RESTRICTED
          && out.hard_stop_latched
          && Near(out.peak_equity,11000.0,1e-6)
-         && Near(out.daily_start_equity,9500.0,1e-6)
-         && out.last_signal_time==1700003300);
+         && Near(out.daily_start_equity,9500.0,1e-6));
 
    //--- identical stores -> STORE_OK
    st=G3ReconcileStores(true,a,true,a,true,out);
@@ -190,6 +186,59 @@ static void test_state_store()
    CHECK("T-010c test_file_only", st==G3_STORE_FILE_ONLY && out.dd_state==a.dd_state);
    st=G3ReconcileStores(false,dummy,true,b,true,out);
    CHECK("T-010d test_gv_only", st==G3_STORE_GV_ONLY && out.dd_state==b.dd_state);
+
+   //--- R-006 spec 12 names exactly three status values
+   CHECK("R-006 test_store_status_spec_values",
+         G3StoreStatusToSpec(G3_STORE_OK)==string("OK")
+         && G3StoreStatusToSpec(G3_STORE_FRESH)==string("OK")
+         && G3StoreStatusToSpec(G3_STORE_FILE_ONLY)==string("RECOVERED")
+         && G3StoreStatusToSpec(G3_STORE_GV_ONLY)==string("RECOVERED")
+         && G3StoreStatusToSpec(G3_STORE_MISMATCH)==string("RECOVERED")
+         && G3StoreStatusToSpec(G3_STORE_BOTH_LOST)==string("UNCERTAIN"));
+  }
+
+//+------------------------------------------------------------------+
+//| 4.1 per-symbol signal ledger (DEV-003)                           |
+//+------------------------------------------------------------------+
+static void test_signal_ledger()
+  {
+   G3SignalState s;
+   G3SignalStateInit(s);
+   s.last_signal_time=1700003000;
+   s.last_signal_id="EURUSD#1700003000";
+
+   G3SignalState back;
+   G3SignalStateInit(back);
+   CHECK("R-003b test_signal_ledger_roundtrip",
+         G3ParseSignalStateLine(G3SignalStateToLine(s),back)
+         && back.last_signal_time==1700003000
+         && back.last_signal_id==string("EURUSD#1700003000"));
+
+   G3SignalState bad;
+   G3SignalStateInit(bad);
+   CHECK("R-003c test_signal_ledger_corrupt_rejected",
+         !G3ParseSignalStateLine("v=2|sigt=1|sigid=X|chk=1",bad));
+
+   //--- conservative merge never re-arms an older signal
+   G3SignalState older;
+   G3SignalStateInit(older);
+   older.last_signal_time=1700002700;
+   older.last_signal_id="EURUSD#1700002700";
+   G3SignalState merged=G3MergeSignalConservative(older,s);
+   CHECK("R-003d test_signal_ledger_merge_takes_later",
+         merged.last_signal_time==1700003000
+         && merged.last_signal_id==string("EURUSD#1700003000"));
+   merged=G3MergeSignalConservative(s,older);
+   CHECK("R-003e test_signal_ledger_merge_keeps_later",
+         merged.last_signal_time==1700003000);
+
+   G3SignalState out;
+   ENUM_G3_STORE_STATUS st=G3ReconcileSignalStores(true,older,true,s,true,out);
+   CHECK("R-003f test_signal_store_mismatch_conservative",
+         st==G3_STORE_MISMATCH && out.last_signal_time==1700003000);
+   st=G3ReconcileSignalStores(false,older,false,s,false,out);
+   CHECK("R-003g test_signal_store_fresh",
+         st==G3_STORE_FRESH && out.last_signal_time==0);
 
    //--- T-005 duplicate signal_id is refused (fail closed)
    CHECK("T-005 test_signal_id_duplicate_rejected",
@@ -726,7 +775,7 @@ static void test_signal_logic()
    m.high[0]=1.1030; m.high[1]=1.1025; m.high[2]=1.1020;
    m.ema20[0]=1.1005; m.ema20[1]=1.1002; m.ema20[2]=1.1000;
    m.close_s1=1.1020; m.ema20_s1=1.1005; m.ema20_s4=1.0990; m.ema50_s1=1.1000;
-   m.atr14_s1=0.0010;
+   m.atr14[0]=0.0010; m.atr14[1]=0.0010; m.atr14[2]=0.0010;
    bool p=false,st=false;
    CHECK("T-039 test_m15_score_two_points", G3M15Score(m,G3_SIDE_BUY,p,st)==2 && p && st);
    //--- only shifts 1..3 are inspected: move every low far above the band
@@ -746,7 +795,7 @@ static void test_signal_logic()
          !G3M15StructureFlag(sb,G3_SIDE_BUY));
    //--- the 0.20 ATR band boundary is inclusive
    M15Input band=m;
-   band.low[0]=band.ema20[0]+0.20*band.atr14_s1;
+   band.low[0]=band.ema20[0]+0.20*band.atr14[0];
    band.low[1]=1.1100; band.low[2]=1.1100;
    CHECK("T-039e test_m15_pullback_band_inclusive",
          G3M15PullbackFlag(band,G3_SIDE_BUY));
@@ -860,12 +909,157 @@ static void test_log_schema()
   }
 
 //+------------------------------------------------------------------+
+//| Regression tests for the conformance fixes (DEV-001 .. DEV-016)  |
+//+------------------------------------------------------------------+
+static void test_dev_regressions()
+  {
+   //--- DEV-001: the M15 pullback band must use the ATR OF THE SAME
+   //--- SHIFT as the Low/High being tested (spec 6). Both cases below
+   //--- give the opposite answer under the old shift-1-only behaviour.
+   M15Input a;
+   for(int k=0;k<3;k++) { a.ema20[k]=1.1000; a.high[k]=1.1100; }
+   a.low[0]=1.1010; a.low[1]=1.1008; a.low[2]=1.1006;
+   a.atr14[0]=0.0010; a.atr14[1]=0.0010; a.atr14[2]=0.0050;
+   a.close_s1=1.1050; a.ema20_s1=1.1000; a.ema20_s4=1.0990; a.ema50_s1=1.0995;
+   //--- only shift 3 reaches its own (wider) band
+   CHECK("R-001a test_m15_pullback_uses_shift3_atr",
+         G3M15PullbackFlag(a,G3_SIDE_BUY));
+
+   M15Input b=a;
+   b.low[0]=1.1020; b.low[1]=1.1006; b.low[2]=1.1030;
+   b.atr14[0]=0.0050; b.atr14[1]=0.0010; b.atr14[2]=0.0010;
+   //--- the wide ATR belongs to shift 1 and must NOT widen shift 2
+   CHECK("R-001b test_m15_pullback_does_not_borrow_shift1_atr",
+         !G3M15PullbackFlag(b,G3_SIDE_BUY));
+
+   //--- a zero ATR on one shift only skips that shift
+   M15Input c=a;
+   c.atr14[2]=0.0;
+   CHECK("R-001c test_m15_zero_atr_on_one_shift",
+         !G3M15PullbackFlag(c,G3_SIDE_BUY));
+
+   //--- SELL side, same rule
+   M15Input d;
+   for(int k=0;k<3;k++) { d.ema20[k]=1.1000; d.low[k]=1.0900; }
+   d.high[0]=1.0990; d.high[1]=1.0992; d.high[2]=1.0994;
+   d.atr14[0]=0.0010; d.atr14[1]=0.0010; d.atr14[2]=0.0050;
+   d.close_s1=1.0950; d.ema20_s1=1.1000; d.ema20_s4=1.1010; d.ema50_s1=1.1005;
+   CHECK("R-001d test_m15_pullback_sell_uses_same_shift_atr",
+         G3M15PullbackFlag(d,G3_SIDE_SELL));
+
+   //--- DEV-002: weekend / abnormal gap cooldown (spec 4.2)
+   const long H4=4*3600;
+   LongSeries g;
+   g.n=4;
+   g.v[0]=1000000;            // reference bar
+   g.v[1]=1000000-H4;         // normal step
+   g.v[2]=1000000-2*H4;
+   g.v[3]=1000000-3*H4;
+   CHECK("R-002a test_no_gap_on_normal_spacing", !G3IsPostGapBar(g,0,H4));
+
+   LongSeries gap;
+   gap.n=3;
+   gap.v[0]=1000000;
+   gap.v[1]=1000000-3*H4;     // step of 3 periods = gap
+   gap.v[2]=1000000-4*H4;
+   CHECK("R-002b test_gap_detected_beyond_two_periods",
+         G3IsPostGapBar(gap,0,H4));
+   //--- only the FIRST bar after the gap is flagged
+   CHECK("R-002c test_bar_after_the_post_gap_bar_is_clean",
+         !G3IsPostGapBar(gap,1,H4));
+
+   LongSeries edge;
+   edge.n=2;
+   edge.v[0]=1000000;
+   edge.v[1]=1000000-2*H4;    // exactly twice the period is not a gap
+   CHECK("R-002d test_exactly_two_periods_is_not_a_gap",
+         !G3IsPostGapBar(edge,0,H4));
+
+   LongSeries lone;
+   lone.n=1;
+   lone.v[0]=1000000;
+   CHECK("R-002e test_gap_unknown_without_neighbour",
+         !G3IsPostGapBar(lone,0,H4));
+   CHECK("R-002f test_gap_rejects_bad_arguments",
+         !G3IsPostGapBar(g,-1,H4) && !G3IsPostGapBar(g,0,0));
+
+   //--- DEV-004: the break-even cost is commission + swap + estimated
+   //--- exit commission, and never the spread (spec 10.2).
+   CHECK("R-004a test_be_cost_sums_commission_and_swap",
+         Near(G3BreakevenCostMoney(-3.0,-1.5,-3.0),7.5,1e-12));
+   CHECK("R-004b test_be_cost_positive_swap_offsets",
+         Near(G3BreakevenCostMoney(-3.0,2.0,-3.0),4.0,1e-12));
+   CHECK("R-004c test_be_cost_net_credit_is_zero",
+         Near(G3BreakevenCostMoney(-3.0,10.0,-3.0),0.0,1e-12));
+   CHECK("R-004d test_be_cost_zero_when_no_costs",
+         Near(G3BreakevenCostMoney(0.0,0.0,0.0),0.0,1e-12));
+   //--- the resulting stop is beyond the entry on both sides
+   CHECK("R-004e test_be_price_uses_cost_only",
+         G3BreakevenPrice(G3_SIDE_BUY,1.10000,0.00003)>1.10000
+         && G3BreakevenPrice(G3_SIDE_SELL,1.10000,0.00003)<1.10000);
+   CHECK("R-004f test_be_price_zero_cost_is_entry",
+         Near(G3BreakevenPrice(G3_SIDE_BUY,1.10000,0.0),1.10000,1e-12));
+
+   //--- DEV-013: the correlation window is 60 complete D1 bars, so the
+   //--- guard must be READY at exactly 60 bars (spec 11.4).
+   CHECK("R-005a test_correlation_window_is_60_bars",
+         G3_CORR_REQUIRED_BARS==60);
+   DoubleSeries x,y;
+   x.n=G3_CORR_REQUIRED_BARS-1;
+   y.n=G3_CORR_REQUIRED_BARS-1;
+   for(int i=0;i<x.n;i++)
+     {
+      x.v[i]=(double)i;
+      y.v[i]=0.5*(double)i+2.0;
+     }
+   double r=0.0;
+   CHECK("R-005b test_pearson_over_59_returns",
+         G3Pearson(x,y,r) && Near(r,1.0,1e-9) && x.n==59);
+
+   //--- DEV-009/010/011/016: log schema follows the section 12 names
+   CHECK("R-007a test_log_uses_spec_feature_flag_names",
+         StringFind(G3LogHeader(),"h4_slope,h4_adx,m15_pullback,m15_structure,breakout_gate",0)>0);
+   CHECK("R-007b test_log_has_post_gap_column",
+         StringFind(G3LogHeader(),"post_gap",0)>0);
+   CHECK("R-007c test_log_has_sl_distance_columns",
+         StringFind(G3LogHeader(),"sl_raw_distance",0)>0
+         && StringFind(G3LogHeader(),"sl_final_distance",0)>0);
+   CHECK("R-007d test_log_has_tick_value_columns",
+         StringFind(G3LogHeader(),"tick_value_profit",0)>0
+         && StringFind(G3LogHeader(),"tick_value_loss",0)>0);
+   CHECK("R-007e test_log_uses_spec_risk_field_name",
+         StringFind(G3LogHeader(),"risk_1lot_calc",0)>0
+         && StringFind(G3LogHeader(),"order_calc_profit_1lot",0)<0);
+   CHECK("R-007f test_log_has_corr_unavailable",
+         StringFind(G3LogHeader(),"corr_unavailable",0)>0);
+   CHECK("R-007g test_log_uses_spec_stop_level_name",
+         StringFind(G3LogHeader(),"stop_level",0)>0
+         && StringFind(G3LogHeader(),"stops_level",0)<0);
+   CHECK("R-007h test_log_has_commission_estimate",
+         StringFind(G3LogHeader(),"commission_per_lot_est",0)>0);
+
+   G3LogRecord rec;
+   G3LogRecordInit(rec);
+   rec.store_status=G3_STORE_MISMATCH;
+   rec.post_gap=true;
+   string line=G3LogRecordToLine(rec);
+   CHECK("R-007i test_log_row_matches_header_after_changes",
+         G3LogColumnCount()==G3LogLineColumnCount(line));
+   CHECK("R-007j test_log_row_carries_spec_store_status",
+         StringFind(line,"RECOVERED",0)>0);
+   //--- the detail column keeps the richer internal status
+   CHECK("R-007k test_log_row_keeps_store_detail",
+         StringFind(line,"STORE_MISMATCH_CONSERVATIVE",0)>0);
+  }
+
+//+------------------------------------------------------------------+
 int main()
   {
    std::printf("G3 Research EA - host unit tests (pure specification logic)\n");
    std::printf("-----------------------------------------------------------\n");
    test_time_sync();
    test_state_store();
+   test_signal_ledger();
    test_dd_state_machine();
    test_risk_and_lots();
    test_deviation();
@@ -873,6 +1067,7 @@ int main()
    test_portfolio();
    test_signal_logic();
    test_log_schema();
+   test_dev_regressions();
    std::printf("-----------------------------------------------------------\n");
    std::printf("PASSED: %d   FAILED: %d\n",g_pass,g_fail);
    return (g_fail==0)?0:1;

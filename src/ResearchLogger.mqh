@@ -50,19 +50,20 @@ struct G3LogRecord
    double            atr_h4;
    double            vol_ratio;
    double            spread_ratio;
-   //--- feature flags
-   bool              f_h4_direction;
-   bool              f_h4_slope;
-   bool              f_h4_adx;
-   bool              f_m15_pullback;
-   bool              f_m15_structure;
-   bool              f_m5_breakout;
-   bool              f_m5_candle;
-   bool              f_m5_momentum;
-   bool              f_vol_point;
-   bool              f_spread_point;
-   bool              f_vol_block;
-   bool              f_spread_block;
+   //--- feature flags (names per Master Specification v0.4 section 12)
+   bool              h4_direction;
+   bool              h4_slope;
+   bool              h4_adx;
+   bool              m15_pullback;
+   bool              m15_structure;
+   bool              breakout_gate;
+   bool              m5_candle;
+   bool              m5_momentum;
+   bool              vol_point;
+   bool              spread_point;
+   bool              vol_block;
+   bool              spread_block;
+   bool              post_gap;          // section 4.2 cooldown / 13.6 subgroup
    double            h4_slope_value;
    double            adx_value;
    double            plus_di;
@@ -71,9 +72,11 @@ struct G3LogRecord
    double            sl_raw;
    double            sl_strategy;
    double            sl_final;
+   double            sl_raw_distance;
+   double            sl_final_distance;
    bool              sl_strategy_adjusted;
    bool              sl_broker_adjusted;
-   long              stops_level;
+   long              stop_level;
    long              freeze_level;
    //--- sizing
    double            risk_pct;
@@ -81,7 +84,10 @@ struct G3LogRecord
    double            raw_lot;
    double            final_lot;
    bool              lot_capped_by_max;
-   double            order_calc_profit_1lot;
+   double            risk_1lot_calc;
+   double            commission_per_lot_est;
+   double            tick_value_profit;
+   double            tick_value_loss;
    //--- execution
    long              deviation_computed;
    long              deviation_hard_cap;
@@ -89,7 +95,7 @@ struct G3LogRecord
    bool              deviation_cap_hit;
    double            requested_price;
    double            fill_price;
-   double            slippage_points;
+   double            slippage;
    bool              execution_risk_violation;
    double            post_fill_risk_ratio;
    //--- exit management
@@ -99,10 +105,10 @@ struct G3LogRecord
    double            partial_close_ratio;
    double            mfe_r;
    double            mae_r;
-   double            mfe_r_3bars;
-   double            mae_r_3bars;
-   double            mfe_r_6bars;
-   double            mae_r_6bars;
+   double            mfe_3bars;
+   double            mae_3bars;
+   double            mfe_6bars;
+   double            mae_6bars;
    int               holding_bars;
    string            exit_reason;
    double            result_r;
@@ -121,6 +127,7 @@ struct G3LogRecord
    double            corr_cluster_risk;
    double            corr_cluster_risk_raw;
    ENUM_G3_CORR_STATE corr_state;
+   bool              corr_unavailable;
    int               corr_warmup_days;
    double            unknown_cluster_risk;
    int               open_positions;
@@ -143,33 +150,35 @@ void G3LogRecordInit(G3LogRecord &r)
    r.h4_bar_time=0; r.m15_bar_time=0; r.m5_bar_time=0; r.signal_close_time=0;
    r.atr_m5=0.0; r.atr_m15=0.0; r.atr_h4=0.0;
    r.vol_ratio=0.0; r.spread_ratio=0.0;
-   r.f_h4_direction=false; r.f_h4_slope=false; r.f_h4_adx=false;
-   r.f_m15_pullback=false; r.f_m15_structure=false;
-   r.f_m5_breakout=false;  r.f_m5_candle=false; r.f_m5_momentum=false;
-   r.f_vol_point=false;    r.f_spread_point=false;
-   r.f_vol_block=false;    r.f_spread_block=false;
+   r.h4_direction=false; r.h4_slope=false; r.h4_adx=false;
+   r.m15_pullback=false; r.m15_structure=false;
+   r.breakout_gate=false; r.m5_candle=false; r.m5_momentum=false;
+   r.vol_point=false;    r.spread_point=false;
+   r.vol_block=false;    r.spread_block=false; r.post_gap=false;
    r.h4_slope_value=0.0; r.adx_value=0.0; r.plus_di=0.0; r.minus_di=0.0;
    r.sl_raw=0.0; r.sl_strategy=0.0; r.sl_final=0.0;
+   r.sl_raw_distance=0.0; r.sl_final_distance=0.0;
    r.sl_strategy_adjusted=false; r.sl_broker_adjusted=false;
-   r.stops_level=0; r.freeze_level=0;
+   r.stop_level=0; r.freeze_level=0;
    r.risk_pct=0.0; r.risk_money=0.0; r.raw_lot=0.0; r.final_lot=0.0;
-   r.lot_capped_by_max=false; r.order_calc_profit_1lot=0.0;
+   r.lot_capped_by_max=false; r.risk_1lot_calc=0.0;
+   r.commission_per_lot_est=0.0; r.tick_value_profit=0.0; r.tick_value_loss=0.0;
    r.deviation_computed=0; r.deviation_hard_cap=0; r.deviation_points=0;
    r.deviation_cap_hit=false;
-   r.requested_price=0.0; r.fill_price=0.0; r.slippage_points=0.0;
+   r.requested_price=0.0; r.fill_price=0.0; r.slippage=0.0;
    r.execution_risk_violation=false; r.post_fill_risk_ratio=0.0;
    r.exit_mode=0; r.timeout_bars=0;
    r.partial_status="NONE"; r.partial_close_ratio=0.0;
    r.mfe_r=0.0; r.mae_r=0.0;
-   r.mfe_r_3bars=0.0; r.mae_r_3bars=0.0;
-   r.mfe_r_6bars=0.0; r.mae_r_6bars=0.0;
+   r.mfe_3bars=0.0; r.mae_3bars=0.0;
+   r.mfe_6bars=0.0; r.mae_6bars=0.0;
    r.holding_bars=0; r.exit_reason=""; r.result_r=0.0; r.realized_pl=0.0;
    r.dd_pct=0.0; r.dd_state=G3_DD_NORMAL; r.daily_lock=false;
    r.hard_stop_latched=false;
    r.peak_equity=0.0; r.equity=0.0; r.balance=0.0;
    r.total_risk_pct=0.0; r.currency_exposure_pct=0.0;
    r.corr_cluster_risk=0.0; r.corr_cluster_risk_raw=0.0;
-   r.corr_state=G3_CORR_READY; r.corr_warmup_days=0;
+   r.corr_state=G3_CORR_READY; r.corr_unavailable=false; r.corr_warmup_days=0;
    r.unknown_cluster_risk=0.0; r.open_positions=0;
    r.skip_reason=G3_R_NONE; r.retcode=0;
    r.store_status=G3_STORE_FRESH; r.run_id="";
@@ -186,23 +195,23 @@ string G3LogHeader()
    h=h+"score_threshold_effective,score_threshold_input,";
    h=h+"h4_bar_time,m15_bar_time,m5_bar_time,signal_close_time,";
    h=h+"atr_m5,atr_m15,atr_h4,vol_ratio,spread_ratio,";
-   h=h+"f_h4_direction,f_h4_slope,f_h4_adx,f_m15_pullback,f_m15_structure,";
-   h=h+"f_m5_breakout,f_m5_candle,f_m5_momentum,f_vol_point,f_spread_point,";
-   h=h+"f_vol_block,f_spread_block,";
+   h=h+"h4_direction,h4_slope,h4_adx,m15_pullback,m15_structure,breakout_gate,";
+   h=h+"m5_candle,m5_momentum,vol_point,spread_point,vol_block,spread_block,post_gap,";
    h=h+"h4_slope_value,adx_value,plus_di,minus_di,";
-   h=h+"sl_raw,sl_strategy,sl_final,sl_strategy_adjusted,sl_broker_adjusted,";
-   h=h+"stops_level,freeze_level,";
-   h=h+"risk_pct,risk_money,raw_lot,final_lot,lot_capped_by_max,order_calc_profit_1lot,";
+   h=h+"sl_raw,sl_strategy,sl_final,sl_raw_distance,sl_final_distance,";
+   h=h+"sl_strategy_adjusted,sl_broker_adjusted,stop_level,freeze_level,";
+   h=h+"risk_pct,risk_money,raw_lot,final_lot,lot_capped_by_max,risk_1lot_calc,";
+   h=h+"commission_per_lot_est,tick_value_profit,tick_value_loss,";
    h=h+"deviation_computed,deviation_hard_cap,deviation_points,deviation_cap_hit,";
-   h=h+"requested_price,fill_price,slippage_points,execution_risk_violation,post_fill_risk_ratio,";
+   h=h+"requested_price,fill_price,slippage,execution_risk_violation,post_fill_risk_ratio,";
    h=h+"exit_mode,timeout_bars,partial_status,partial_close_ratio,";
-   h=h+"mfe_r,mae_r,mfe_r_3bars,mae_r_3bars,mfe_r_6bars,mae_r_6bars,";
+   h=h+"mfe_r,mae_r,mfe_3bars,mae_3bars,mfe_6bars,mae_6bars,";
    h=h+"fakeout_3,fakeout_6,";
-   h=h+"holding_bars,exit_reason,result_R,realized_pl,";
+   h=h+"holding_bars,exit_reason,result_r,realized_pl,";
    h=h+"dd_pct,dd_state,daily_lock,hard_stop_latched,peak_equity,equity,balance,";
    h=h+"total_risk,currency_exposure,corr_cluster_risk,corr_cluster_risk_raw,";
-   h=h+"corr_state,corr_warmup_days,unknown_cluster_risk,open_positions,";
-   h=h+"skip_reason,retcode,state_store_status,run_id";
+   h=h+"corr_state,corr_unavailable,corr_warmup_days,unknown_cluster_risk,open_positions,";
+   h=h+"skip_reason,retcode,state_store_status,state_store_detail,run_id";
    return(h);
   }
 
@@ -227,30 +236,35 @@ string G3LogRecordToLine(const G3LogRecord &r)
    s=s+DoubleToString(r.atr_m5,8)+","+DoubleToString(r.atr_m15,8)+","
       +DoubleToString(r.atr_h4,8)+","+DoubleToString(r.vol_ratio,6)+","
       +DoubleToString(r.spread_ratio,6)+",";
-   s=s+G3Bool(r.f_h4_direction)+","+G3Bool(r.f_h4_slope)+","+G3Bool(r.f_h4_adx)+","
-      +G3Bool(r.f_m15_pullback)+","+G3Bool(r.f_m15_structure)+",";
-   s=s+G3Bool(r.f_m5_breakout)+","+G3Bool(r.f_m5_candle)+","+G3Bool(r.f_m5_momentum)+","
-      +G3Bool(r.f_vol_point)+","+G3Bool(r.f_spread_point)+",";
-   s=s+G3Bool(r.f_vol_block)+","+G3Bool(r.f_spread_block)+",";
+   s=s+G3Bool(r.h4_direction)+","+G3Bool(r.h4_slope)+","+G3Bool(r.h4_adx)+","
+      +G3Bool(r.m15_pullback)+","+G3Bool(r.m15_structure)+","
+      +G3Bool(r.breakout_gate)+",";
+   s=s+G3Bool(r.m5_candle)+","+G3Bool(r.m5_momentum)+","
+      +G3Bool(r.vol_point)+","+G3Bool(r.spread_point)+","
+      +G3Bool(r.vol_block)+","+G3Bool(r.spread_block)+","+G3Bool(r.post_gap)+",";
    s=s+DoubleToString(r.h4_slope_value,6)+","+DoubleToString(r.adx_value,4)+","
       +DoubleToString(r.plus_di,4)+","+DoubleToString(r.minus_di,4)+",";
    s=s+DoubleToString(r.sl_raw,8)+","+DoubleToString(r.sl_strategy,8)+","
-      +DoubleToString(r.sl_final,8)+","+G3Bool(r.sl_strategy_adjusted)+","
-      +G3Bool(r.sl_broker_adjusted)+",";
-   s=s+IntegerToString(r.stops_level)+","+IntegerToString(r.freeze_level)+",";
+      +DoubleToString(r.sl_final,8)+","+DoubleToString(r.sl_raw_distance,8)+","
+      +DoubleToString(r.sl_final_distance,8)+",";
+   s=s+G3Bool(r.sl_strategy_adjusted)+","+G3Bool(r.sl_broker_adjusted)+","
+      +IntegerToString(r.stop_level)+","+IntegerToString(r.freeze_level)+",";
    s=s+DoubleToString(r.risk_pct,4)+","+DoubleToString(r.risk_money,4)+","
       +DoubleToString(r.raw_lot,6)+","+DoubleToString(r.final_lot,4)+","
-      +G3Bool(r.lot_capped_by_max)+","+DoubleToString(r.order_calc_profit_1lot,6)+",";
+      +G3Bool(r.lot_capped_by_max)+","+DoubleToString(r.risk_1lot_calc,6)+",";
+   s=s+DoubleToString(r.commission_per_lot_est,6)+","
+      +DoubleToString(r.tick_value_profit,8)+","
+      +DoubleToString(r.tick_value_loss,8)+",";
    s=s+IntegerToString(r.deviation_computed)+","+IntegerToString(r.deviation_hard_cap)+","
       +IntegerToString(r.deviation_points)+","+G3Bool(r.deviation_cap_hit)+",";
    s=s+DoubleToString(r.requested_price,8)+","+DoubleToString(r.fill_price,8)+","
-      +DoubleToString(r.slippage_points,3)+","+G3Bool(r.execution_risk_violation)+","
+      +DoubleToString(r.slippage,3)+","+G3Bool(r.execution_risk_violation)+","
       +DoubleToString(r.post_fill_risk_ratio,6)+",";
    s=s+IntegerToString(r.exit_mode)+","+IntegerToString(r.timeout_bars)+","
       +r.partial_status+","+DoubleToString(r.partial_close_ratio,4)+",";
    s=s+DoubleToString(r.mfe_r,6)+","+DoubleToString(r.mae_r,6)+","
-      +DoubleToString(r.mfe_r_3bars,6)+","+DoubleToString(r.mae_r_3bars,6)+","
-      +DoubleToString(r.mfe_r_6bars,6)+","+DoubleToString(r.mae_r_6bars,6)+",";
+      +DoubleToString(r.mfe_3bars,6)+","+DoubleToString(r.mae_3bars,6)+","
+      +DoubleToString(r.mfe_6bars,6)+","+DoubleToString(r.mae_6bars,6)+",";
    s=s+G3_UNDEFINED_TOKEN+","+G3_UNDEFINED_TOKEN+",";
    s=s+IntegerToString(r.holding_bars)+","+r.exit_reason+","
       +DoubleToString(r.result_r,6)+","+DoubleToString(r.realized_pl,4)+",";
@@ -260,9 +274,11 @@ string G3LogRecordToLine(const G3LogRecord &r)
       +DoubleToString(r.balance,2)+",";
    s=s+DoubleToString(r.total_risk_pct,4)+","+DoubleToString(r.currency_exposure_pct,4)+","
       +DoubleToString(r.corr_cluster_risk,4)+","+DoubleToString(r.corr_cluster_risk_raw,4)+",";
-   s=s+G3CorrStateToString(r.corr_state)+","+IntegerToString(r.corr_warmup_days)+","
+   s=s+G3CorrStateToString(r.corr_state)+","+G3Bool(r.corr_unavailable)+","
+      +IntegerToString(r.corr_warmup_days)+","
       +DoubleToString(r.unknown_cluster_risk,4)+","+IntegerToString(r.open_positions)+",";
    s=s+G3ReasonToString(r.skip_reason)+","+IntegerToString((long)r.retcode)+","
+      +G3StoreStatusToSpec(r.store_status)+","
       +G3StoreStatusToString(r.store_status)+","+r.run_id;
    return(s);
   }

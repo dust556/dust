@@ -11,6 +11,8 @@ OUT = os.path.join(ROOT, "tests", "unit_test_plan.md")
 SECTIONS = {
  "test_time_sync": "4.1 MTF time synchronisation, decision_tick, signal_id",
  "test_state_store": "10 StateStore, dual store reconciliation, exactly-once consume",
+ "test_signal_ledger": "4.1 per-symbol signal ledger, exactly-once consume (DEV-003)",
+ "test_dev_regressions": "regression cover for the conformance fixes DEV-001, 002, 004, 009-016",
  "test_dd_state_machine": "10/11 drawdown state machine, hysteresis, latch, DailyEntryLock",
  "test_risk_and_lots": "9 stop placement, risk money, lot sizing, post-fill risk",
  "test_deviation": "13 PipSize, deviation computation and hard cap",

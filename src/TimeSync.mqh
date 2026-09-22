@@ -48,6 +48,24 @@ bool G3HasDepthBehind(const LongSeries &open_times,const int index,const int nee
    return((index+needed_bars)<=open_times.n);
   }
 
+//--- Master Specification v0.4 section 4.2 - gap detection.
+//--- A gap is an interval between two consecutive higher timeframe bars
+//--- that exceeds twice the normal period of that timeframe. The bar at
+//--- `index` is the first bar completed after such a gap when the step
+//--- from the previous (older) bar exceeds 2 x period.
+//--- When the older neighbour is not available the bar is not flagged;
+//--- callers guarantee history depth through G3HasDepthBehind().
+bool G3IsPostGapBar(const LongSeries &open_times,const int index,
+                    const long period_seconds)
+  {
+   if(index<0 || period_seconds<=0)
+      return(false);
+   if(index+1>=open_times.n)
+      return(false);
+   long delta=open_times.v[index]-open_times.v[index+1];
+   return(delta>2*period_seconds);
+  }
+
 //--- signal_id text form: "<symbol>#<m5_bar_open_time_seconds>"
 string G3BuildSignalId(const string symbol,const long m5_bar_open_time)
   {
@@ -83,10 +101,12 @@ bool G3CopyOpenTimes(const string symbol,const ENUM_TIMEFRAMES tf,
 //--- bar (e.g. EMA200 warm-up, slope look-back).
 bool G3ResolveHtfBar(const string symbol,const ENUM_TIMEFRAMES tf,
                      const datetime signal_close_time,const int needed_bars,
-                     int &index_out,datetime &bar_open_time_out)
+                     int &index_out,datetime &bar_open_time_out,
+                     bool &post_gap_out)
   {
    index_out=-1;
    bar_open_time_out=0;
+   post_gap_out=false;
    LongSeries times;
    int depth=needed_bars+8;
    if(depth>G3_MAX_SERIES)
@@ -100,6 +120,7 @@ bool G3ResolveHtfBar(const string symbol,const ENUM_TIMEFRAMES tf,
       return(false);
    index_out=idx;
    bar_open_time_out=(datetime)times.v[idx];
+   post_gap_out=G3IsPostGapBar(times,idx,(long)PeriodSeconds(tf));
    return(true);
   }
 

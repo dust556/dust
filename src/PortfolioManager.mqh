@@ -272,14 +272,18 @@ PortfolioDecision G3CheckPortfolio(const PortfolioSnapshot &snap,const CorrMatri
 #ifndef G3_HOST_TEST
 
 //--- Close-to-close log returns over complete D1 bars only.
-//--- `G3_CORR_REQUIRED_BARS` returns require one extra closed bar.
-//--- ASSUMPTION A-05: Pearson correlation is computed on D1 log returns.
+//--- Master Specification v0.4 section 11.4: the window is the most
+//--- recent 60 complete D1 bars, and CORR_WARMUP_UNKNOWN is raised when
+//--- fewer than 60 complete bars exist. 60 complete bars yield 59
+//--- close-to-close log returns (DEV-013 fix: the previous build
+//--- required 61 bars and therefore reported WARMUP_UNKNOWN at exactly
+//--- 60 complete bars, which section 11.4 does not).
 bool G3D1Returns(const string symbol,const datetime signal_close_time,
                  DoubleSeries &out,int &bars_available)
   {
    out.n=0;
    bars_available=0;
-   int need=G3_CORR_REQUIRED_BARS+1;
+   int need=G3_CORR_REQUIRED_BARS;
    datetime times[];
    double closes[];
    ArraySetAsSeries(times,true);
@@ -304,11 +308,11 @@ bool G3D1Returns(const string symbol,const datetime signal_close_time,
      }
    if(start<0)
       return(false);
-   int avail=ArraySize(closes)-start-1;
+   int avail=ArraySize(closes)-start;
    bars_available=(avail>0)?avail:0;
    if(bars_available<G3_CORR_REQUIRED_BARS)
       return(false);
-   for(int k=0;k<G3_CORR_REQUIRED_BARS;k++)
+   for(int k=0;k<G3_CORR_REQUIRED_BARS-1;k++)
      {
       double c0=closes[start+k];
       double c1=closes[start+k+1];
@@ -316,7 +320,7 @@ bool G3D1Returns(const string symbol,const datetime signal_close_time,
          return(false);
       out.v[k]=MathLog(c0/c1);
      }
-   out.n=G3_CORR_REQUIRED_BARS;
+   out.n=G3_CORR_REQUIRED_BARS-1;
    return(true);
   }
 

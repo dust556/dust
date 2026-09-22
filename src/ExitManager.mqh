@@ -85,15 +85,30 @@ double G3PriceAtR(const ENUM_G3_SIDE side,const double entry_price,
    return((side==G3_SIDE_BUY)?(entry_price+off):(entry_price-off));
   }
 
-//--- Cost adjusted break-even: the stop is placed one execution cost
-//--- beyond the entry so that a BE stop-out is not a loss.
-//--- ASSUMPTION A-06: cost = current spread in price (+ optional
-//--- commission expressed in price supplied by the caller).
+//--- Cost adjusted break-even (Master Specification v0.4 section 10.2).
+//--- The BUY break-even stop is the lowest price at which closing the
+//--- position still leaves P/L >= 0 after deducting
+//---   already incurred commission + swap + estimated exit commission.
+//--- The SPREAD IS NOT ADDED: section 10.2 states that it is already
+//--- contained in the Ask/Bid execution relationship and must not be
+//--- counted twice (DEV-004 fix).
+//--- `cost_price` is that money amount already converted to a price
+//--- distance by the caller, and is never negative.
 double G3BreakevenPrice(const ENUM_G3_SIDE side,const double entry_price,
                         const double cost_price)
   {
    double c=(cost_price>0.0)?cost_price:0.0;
    return((side==G3_SIDE_BUY)?(entry_price+c):(entry_price-c));
+  }
+
+//--- Money amount that the break-even stop has to recover, from the
+//--- signed money terms of section 10.2. Commission values are negative
+//--- costs and swap is signed; a net credit yields 0, never a discount.
+double G3BreakevenCostMoney(const double commission_incurred,const double swap_accrued,
+                            const double commission_exit_estimate)
+  {
+   double net=commission_incurred+swap_accrued+commission_exit_estimate;
+   return((net<0.0)?(-net):0.0);
   }
 
 //--- ATR trail anchored on the extreme reached since entry.

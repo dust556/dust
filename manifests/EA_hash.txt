@@ -3,4 +3,4 @@
 # this environment. Fill this in from the machine that compiles the EA:
 #   sha256sum G3_ResearchEA.ex5
 EA_HASH=PENDING_METAEDITOR_COMPILE
-SOURCE_HASH=59b5da9afa41627dbb243090a37883c064266ccd8b5f2b5f59902d48ab295c61
+SOURCE_HASH=50e42c6af071ea65b407680aad45acf86a682784684325ed9a6ddfa2c3462cb1

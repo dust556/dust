@@ -6,8 +6,9 @@ Master Specification v0.4 section -> implementation file -> function -> test cas
 > the section numbers of the implementation request, not of the authority
 > document. The numbers below are those of Master Specification v0.4 itself.
 > Known conformance deviations found during that reconciliation are recorded in
-> `docs/G4_reconciliation_report.md` (DEV-001 .. DEV-017); rows affected by one
-> carry the DEV id.
+> `docs/G4_reconciliation_report.md` (DEV-001 .. DEV-017). DEV-001..004,
+> 008..013, 015 and 016 were fixed in `docs/G4_patch_report.md`; the rows
+> below point at the code and the regression tests that now cover them.
 
 Test case IDs starting with `T-` are executable host unit tests
 (`tests/host/test_main.cpp`, run with `tests/run_unit_tests.sh`).
@@ -25,12 +26,12 @@ executed inside a terminal (`tests/integration_test_plan.md`).
 | 4.1 signal_id | `src/TimeSync.mqh` | `G3BuildSignalId()` | T-004 test_signal_id_format |
 | 4.1 consume order (check, consume, flush, evaluate) | `src/StateStore.mqh` | `G3ConsumeSignal()`, `G3PersistState()` | T-005, T-005b, T-005c, I-005 test_consume_before_evaluation_order |
 | 4.1 fail-closed exactly once | `src/StateStore.mqh` | `G3SignalAlreadyConsumed()`, `G3ConsumeSignal()` | T-005, I-006 test_crash_between_consume_and_order |
-| 4.2 weekend / abnormal gap cooldown (**DEV-002**: not implemented) | `src/TimeSync.mqh` (per 15.1) | *missing* | *no test — feature absent* |
+| 4.2 weekend / abnormal gap cooldown | `src/TimeSync.mqh` | `G3IsPostGapBar()`, `G3ResolveHtfBar()` | R-002a, R-002b, R-002c, R-002d, R-002e, R-002f |
 | 5.1 H4 direction gate | `src/SignalH4.mqh` | `G3H4DirectionGate()`, `G3H4Direction()` | T-037, T-037b |
 | 5.2 H4 EMA50 slope point | `src/SignalH4.mqh` | `G3H4SlopeValue()`, `G3H4SlopeFlag()` | T-038, T-038c, T-038g |
 | 5.2 H4 ADX/DI point | `src/SignalH4.mqh` | `G3H4AdxFlag()` | T-038d, T-038e, T-038f |
 | 8.1 H4 score >= 1 | `src/SignalH4.mqh` | `G3H4Score()`, `G3_H4_MIN_SCORE` | T-038b |
-| 6 M15 pullback (**DEV-001**: ATR must be same-shift) | `src/SetupM15.mqh` | `G3M15PullbackFlag()` | T-039, T-039b, T-039c, T-039e |
+| 6 M15 pullback (same-shift ATR) | `src/SetupM15.mqh` | `G3M15PullbackFlag()` | T-039, T-039b, T-039c, T-039e, R-001a, R-001b, R-001c, R-001d |
 | 6 M15 structure | `src/SetupM15.mqh` | `G3M15StructureFlag()` | T-039d |
 | 6 / 8.1 M15 score 0-2 (no minimum) | `src/SetupM15.mqh` | `G3M15Score()` | T-039 |
 | 7.1 M5 breakout hard gate | `src/TriggerM5.mqh` | `G3M5BreakoutFlag()` | T-040, T-040b |
@@ -46,7 +47,7 @@ executed inside a terminal (`tests/integration_test_plan.md`).
 | 9.1 1.0 ATR minimum / 2.5 ATR rejection | `src/RiskManager.mqh` | `G3AdjustStopStrategy()` | T-024, T-024c, T-025, T-025b |
 | 9.1 StopLevel correction and re-check | `src/RiskManager.mqh` | `G3AdjustStopBroker()` | T-023, T-023b, T-026 |
 | 9.1 / 12 SL logging fields | `src/ResearchLogger.mqh` | `G3LogRecordToLine()` | T-047 |
-| 9.2 RiskMoney | `src/RiskManager.mqh` | `G3RiskMoney()`, `G3RiskPctForState()` | T-014f |
+| 9.2 RiskMoney (incl. commission estimate) | `src/RiskManager.mqh`, `src/G3_ResearchEA.mq5` | `G3RiskMoney()`, `G3RiskPctForState()`, `CommissionPerLotRoundTurn()` | T-014f, I-007 |
 | 9.2 / 15.4 OrderCalcProfit canonical 1 lot loss | `src/RiskManager.mqh` | `G3LossForOneLot()` | I-007 test_order_calc_profit_jpy_and_non_jpy |
 | 9.2 lot floor onto VolumeStep | `src/G3Types.mqh`, `src/RiskManager.mqh` | `G3FloorToStep()`, `G3NormalizeVolume()`, `G3ComputeLot()` | T-018, T-018b, T-018c |
 | 9.2 VolumeMin rejection | `src/RiskManager.mqh` | `G3ComputeLot()` | T-019, T-018d |
@@ -55,7 +56,7 @@ executed inside a terminal (`tests/integration_test_plan.md`).
 | 11.1 recovery hysteresis 7% / 5% | `src/RiskManager.mqh` | `G3NextDDState()` | T-014, T-014b, T-014c, T-014d |
 | 11.1 HARD_STOP latch | `src/RiskManager.mqh` | `G3NextDDState()` | T-013, T-015 |
 | 11.1 manual reset (DD < 9% + audit) | `src/RiskManager.mqh`, `src/StateStore.mqh` | `G3ManualResetAdmissible()`, `G3ManualHardStopReset()`, `G3AuditLog()` | T-016, I-008 test_manual_reset_audit_record |
-| 11.2 StateStore fields, schema, checksum (**DEV-003**: key must be account+magic) | `src/StateStore.mqh` | `G3StateToRecord()`, `G3StateToLine()`, `G3StateChecksum()`, `G3ParseStateLine()` | T-006, T-007b, T-007c |
+| 11.2 StateStore fields, schema, checksum (key = account_login + magic) | `src/StateStore.mqh` | `G3StateToRecord()`, `G3StateToLine()`, `G3StateChecksum()`, `G3ParseStateLine()` | T-006, T-007b, T-007c |
 | 11.2 dual store (file + global variables) | `src/StateStore.mqh` | `G3WriteStateFile()`, `G3WriteStateGV()`, `G3LoadState()` | I-009 test_dual_store_written, I-010 test_file_corruption_recovery |
 | 11.2 mismatch -> conservative | `src/StateStore.mqh` | `G3ReconcileStores()`, `G3MergeConservative()`, `G3MoreConservativeState()` | T-010, T-010b, T-010c, T-010d |
 | 11.2 both stores lost -> STATE_UNCERTAIN | `src/StateStore.mqh` | `G3ReconcileStores()` | T-009, T-009b |
@@ -76,7 +77,7 @@ executed inside a terminal (`tests/integration_test_plan.md`).
 | 9.3 one OrderSend per decision_tick, no retry | `src/OrderManager.mqh` | `G3SendMarketOrder()` | I-014 test_single_order_send_no_retry, I-015 test_order_send_failure_logged |
 | 9.3 post-fill risk > 105% | `src/RiskManager.mqh`, `src/G3_ResearchEA.mq5` | `G3PostFillRiskRatio()`, `G3RiskCappedVolume()`, `EvaluateDecisionTick()` | T-027, T-027b, T-027c, I-016 test_post_fill_reduce_or_close |
 | 10 A: fixed 2.0R TP, fixed SL | `src/ExitManager.mqh` | `G3InitialTakeProfit()`, `G3DesiredStop()` | T-048, T-048b, T-030e |
-| 10 / 10.2 B: cost adjusted BE at 1.0R (**DEV-004**) | `src/ExitManager.mqh` | `G3BreakevenPrice()`, `G3DesiredStop()` | T-030d, T-030f |
+| 10 / 10.2 B: cost adjusted BE at 1.0R | `src/ExitManager.mqh` | `G3BreakevenCostMoney()`, `G3BreakevenPrice()`, `G3DesiredStop()` | T-030d, T-030f, R-004a, R-004b, R-004c, R-004d, R-004e, R-004f |
 | 10.1 B: ~50% partial at 1.5R | `src/ExitManager.mqh` | `G3BuildPartialPlan()` | T-028, T-029, T-029b, T-029c, T-029d |
 | 10.1 B: partial impossible -> BE + trail on full volume | `src/ExitManager.mqh`, `src/G3_ResearchEA.mq5` | `G3DesiredStop()`, `ManagePositions()` | T-028, T-030g |
 | 10 B: ATR x 2.0 trail after partial | `src/ExitManager.mqh` | `G3AtrTrailStop()`, `G3DesiredStop()` | T-030c, T-030g |

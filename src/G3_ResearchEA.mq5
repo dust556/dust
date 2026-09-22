@@ -66,9 +66,11 @@ int    h_m15_ema20=INVALID_HANDLE,h_m15_ema50=INVALID_HANDLE,h_m15_atr=INVALID_H
 int    h_m5_ema9 =INVALID_HANDLE, h_m5_ema20 =INVALID_HANDLE,h_m5_atr =INVALID_HANDLE;
 
 G3StoreContext g_ctx;
-G3State        g_state;
+G3State        g_state;          // shared: account_login + magic (11.2)
+G3SignalState  g_sig;            // per symbol signal ledger (4.1)
 G3Logger       g_logger;
 ENUM_G3_STORE_STATUS g_store_status=G3_STORE_FRESH;
+ENUM_G3_STORE_STATUS g_sig_status=G3_STORE_FRESH;
 
 G3TradeState   g_trades[G3_MAX_TRACKED];
 int            g_trade_count=0;
@@ -107,21 +109,73 @@ bool CopyLowSeries(const string symbol,const ENUM_TIMEFRAMES tf,const int start,
    return(CopyLow(symbol,tf,start,count,dst)==count);
   }
 
-//--- convert a money amount per 1.0 lot into a price distance
-double MoneyPerLotToPrice(const string symbol,const double money_per_lot)
+//--- convert a money amount into a price distance for `volume` lots
+double MoneyToPriceDistance(const string symbol,const double money,const double volume)
   {
-   if(money_per_lot<=0.0)
+   if(money<=0.0 || volume<=0.0)
       return(0.0);
    double p=SymbolInfoDouble(symbol,SYMBOL_BID);
    if(p<=0.0)
       return(0.0);
    double profit=0.0;
-   if(!OrderCalcProfit(ORDER_TYPE_BUY,symbol,1.0,p,p+1.0,profit))
+   if(!OrderCalcProfit(ORDER_TYPE_BUY,symbol,volume,p,p+1.0,profit))
       return(0.0);
    double value_per_price_unit=MathAbs(profit);
    if(value_per_price_unit<=0.0)
       return(0.0);
-   return(money_per_lot/value_per_price_unit);
+   return(money/value_per_price_unit);
+  }
+
+//--- Round-turn commission per 1.0 lot in account currency.
+//--- Master Specification v0.4 section 9.2 ("Commission見積りを利用可能なら
+//--- 事前riskに加える") and 10.2 ("実commissionがdeal historyから取得できる
+//--- 場合は実値を優先。broker fee scheduleが明示される場合はそちらを優先").
+//--- The explicit fee schedule input wins; otherwise the estimate is
+//--- derived from this symbol's recent closed deals. 0 when unavailable.
+double CommissionPerLotRoundTurn(const string symbol,const long magic)
+  {
+   if(InpStressCommissionPerLot>0.0)
+      return(InpStressCommissionPerLot);
+   datetime to=TimeCurrent();
+   datetime from=(datetime)((long)to-30*24*3600);
+   if(!HistorySelect(from,to))
+      return(0.0);
+   double commission=0.0,volume=0.0;
+   int total=HistoryDealsTotal();
+   for(int i=0;i<total;i++)
+     {
+      ulong d=HistoryDealGetTicket(i);
+      if(d==0)
+         continue;
+      if(HistoryDealGetString(d,DEAL_SYMBOL)!=symbol)
+         continue;
+      if(HistoryDealGetInteger(d,DEAL_MAGIC)!=magic)
+         continue;
+      commission+=MathAbs(HistoryDealGetDouble(d,DEAL_COMMISSION));
+      volume+=HistoryDealGetDouble(d,DEAL_VOLUME);
+     }
+   if(volume<=0.0 || commission<=0.0)
+      return(0.0);
+   //--- commission/volume is the per-lot cost of ONE leg on average;
+   //--- a round turn is entry plus exit.
+   return(2.0*commission/volume);
+  }
+
+//--- Commission already booked on an open position (negative money).
+double PositionCommissionIncurred(const ulong position_ticket)
+  {
+   if(!HistorySelectByPosition(position_ticket))
+      return(0.0);
+   double sum=0.0;
+   int deals=HistoryDealsTotal();
+   for(int i=0;i<deals;i++)
+     {
+      ulong d=HistoryDealGetTicket(i);
+      if(d==0)
+         continue;
+      sum+=HistoryDealGetDouble(d,DEAL_COMMISSION);
+     }
+   return(sum);
   }
 
 //--- server midnight of a server timestamp
@@ -176,6 +230,7 @@ int OnInit()
 
    G3StoreContextInit(g_ctx,sym,InpMagic);
    g_store_status=G3LoadState(g_ctx,g_state);
+   g_sig_status=G3LoadSignalState(g_ctx,g_sig);
    if(g_store_status==G3_STORE_BOTH_LOST)
       Print("G3: both state stores unrecoverable -> STATE_UNCERTAIN, no new entries");
    if(g_store_status==G3_STORE_MISMATCH)
@@ -209,11 +264,16 @@ int OnInit()
 
    if(!G3PersistState(g_ctx,g_state))
       Print("G3: warning - initial state flush failed");
+   if(!G3PersistSignalState(g_ctx,g_sig))
+      Print("G3: warning - initial signal ledger flush failed");
 
    g_last_m5_open=0;
    g_init_ok=true;
-   PrintFormat("G3 Research EA %s (%s) started on %s, magic=%d, run=%s",
-               G3_EA_VERSION,G3_SPEC_VERSION,sym,(int)InpMagic,InpRunId);
+   PrintFormat("G3 Research EA %s (%s) started on %s, magic=%d, run=%s, "
+               "account store=%s, signal ledger=%s",
+               G3_EA_VERSION,G3_SPEC_VERSION,sym,(int)InpMagic,InpRunId,
+               G3StoreStatusToString(g_store_status),
+               G3StoreStatusToString(g_sig_status));
    return(INIT_SUCCEEDED);
   }
 
@@ -226,6 +286,7 @@ void OnDeinit(const int reason)
      {
       G3SaveTradeStates(g_ctx,g_trades,g_trade_count);
       G3PersistState(g_ctx,g_state);
+      G3PersistSignalState(g_ctx,g_sig);
      }
    G3LoggerClose(g_logger);
    if(h_h4_ema50 !=INVALID_HANDLE) IndicatorRelease(h_h4_ema50);
@@ -246,27 +307,53 @@ void OnDeinit(const int reason)
 void RefreshAccountState(double &equity_out,double &dd_pct_out,bool &daily_lock_out)
   {
    equity_out=AccountInfoDouble(ACCOUNT_EQUITY);
-   //--- server day rollover: capture the daily start equity (section 11)
+
+   //--- The account record is shared by every symbol instance
+   //--- (spec 11.2: key = account_login + MagicNumber), so the
+   //--- read-modify-write is serialised and refreshed from the store.
+   bool locked=G3PortfolioLock(g_ctx,G3_LOCK_TIMEOUT_MS);
+   if(locked)
+      G3RefreshSharedState(g_ctx,g_state);
+
+   bool changed=false;
+
+   //--- Server day rollover (spec 11.3). Only a FORWARD date change
+   //--- starts a new day: spec 15.4 requires that a clock regression or
+   //--- a reconnection never triggers a second reset of the same day.
    long today=ServerDateOf(TimeCurrent());
-   if(today!=g_state.server_date)
+   if(today>g_state.server_date)
      {
       g_state.server_date=today;
       g_state.daily_start_equity=equity_out;
-      G3PersistState(g_ctx,g_state);
+      changed=true;
+     }
+   if(g_state.daily_start_equity<=0.0 && equity_out>0.0)
+     {
+      g_state.daily_start_equity=equity_out;
+      changed=true;
      }
    if(equity_out>g_state.peak_equity)
+     {
       g_state.peak_equity=equity_out;
+      changed=true;
+     }
    dd_pct_out=G3DrawdownPct(g_state.peak_equity,equity_out);
    if(g_state.dd_state!=G3_DD_UNCERTAIN)
      {
-      ENUM_G3_DD_STATE next=G3NextDDState(g_state.dd_state,dd_pct_out,
-                                          g_state.hard_stop_latched);
-      if(next!=g_state.dd_state)
+      bool latched=g_state.hard_stop_latched;
+      ENUM_G3_DD_STATE next=G3NextDDState(g_state.dd_state,dd_pct_out,latched);
+      if(next!=g_state.dd_state || latched!=g_state.hard_stop_latched)
         {
          g_state.dd_state=next;
-         G3PersistState(g_ctx,g_state);
+         g_state.hard_stop_latched=latched;
+         changed=true;
         }
      }
+   if(changed && locked)
+      G3PersistState(g_ctx,g_state);
+   if(locked)
+      G3PortfolioUnlock(g_ctx);
+
    daily_lock_out=G3DailyEntryLocked(g_state.daily_start_equity,equity_out);
   }
 
@@ -321,13 +408,13 @@ void EvaluateDecisionTick(const datetime m5_bar_open)
 
    //--- 1..3: consumed check, atomic consume, flush to both stores.
    ENUM_G3_REASON consume_reason=G3_R_NONE;
-   if(!G3ConsumeSignal(g_ctx,g_state,signal_id,(long)m5_bar_open,consume_reason))
+   if(!G3ConsumeSignal(g_ctx,g_sig,signal_id,(long)m5_bar_open,consume_reason))
      {
       EmitRecord(rec,consume_reason);
       return;
      }
 
-   //--- 4: only now is the signal evaluated.
+   //--- 4: only now is the signal evaluated. Order follows appendix A.
    if(g_state.dd_state==G3_DD_UNCERTAIN || g_store_status==G3_STORE_BOTH_LOST)
      {
       EmitRecord(rec,G3_R_STATE_UNCERTAIN);
@@ -344,15 +431,17 @@ void EvaluateDecisionTick(const datetime m5_bar_open)
       return;
      }
 
-   //--- market snapshot re-read at the decision tick (section 13)
+   //--- market snapshot re-read at the decision tick (section 9.3)
    MarketSnapshot mk;
    if(!G3ReadMarket(_Symbol,mk))
      {
       EmitRecord(rec,G3_R_DATA_UNAVAILABLE);
       return;
      }
-   rec.stops_level=mk.stops_level;
+   rec.stop_level=mk.stops_level;
    rec.freeze_level=mk.freeze_level;
+   rec.tick_value_profit=SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_VALUE_PROFIT);
+   rec.tick_value_loss  =SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_VALUE_LOSS);
    if(!mk.tradable)
      {
       EmitRecord(rec,G3_R_TRADE_MODE_DISABLED);
@@ -362,16 +451,35 @@ void EvaluateDecisionTick(const datetime m5_bar_open)
    //--- spread used by the filters and by the deviation computation.
    double spread_price=mk.spread_price+((double)InpStressExtraSpreadPoints)*mk.point;
 
-   //--- ---------------- H4 reference bar ----------------
-   int h4_idx=-1;
-   datetime h4_time=0;
-   if(!G3ResolveHtfBar(_Symbol,PERIOD_H4,signal_close_time,G3_H4_HISTORY,h4_idx,h4_time))
+   //--- ---------------- higher timeframe reference bars -------------
+   int h4_idx=-1,m15_idx=-1;
+   datetime h4_time=0,m15_time=0;
+   bool h4_post_gap=false,m15_post_gap=false;
+   if(!G3ResolveHtfBar(_Symbol,PERIOD_H4,signal_close_time,G3_H4_HISTORY,
+                       h4_idx,h4_time,h4_post_gap))
      {
       EmitRecord(rec,G3_R_HTF_BAR_UNRESOLVED);
       return;
      }
    rec.h4_bar_time=(long)h4_time;
+   if(!G3ResolveHtfBar(_Symbol,PERIOD_M15,signal_close_time,G3_M15_HISTORY,
+                       m15_idx,m15_time,m15_post_gap))
+     {
+      EmitRecord(rec,G3_R_HTF_BAR_UNRESOLVED);
+      return;
+     }
+   rec.m15_bar_time=(long)m15_time;
 
+   //--- Section 4.2: no new signal on the first H4 bar completed after a
+   //--- gap wider than twice the normal period.
+   rec.post_gap=h4_post_gap;
+   if(h4_post_gap)
+     {
+      EmitRecord(rec,G3_R_POST_GAP_COOLDOWN);
+      return;
+     }
+
+   //--- ---------------- H4 direction gate (5.1) ---------------------
    double h4_ema50[],h4_ema200[],h4_atr[],h4_adx[],h4_pdi[],h4_mdi[],h4_close[];
    if(!CopyBufSeries(h_h4_ema50,0,h4_idx,4,h4_ema50)   ||
       !CopyBufSeries(h_h4_ema200,0,h4_idx,1,h4_ema200) ||
@@ -406,76 +514,14 @@ void EvaluateDecisionTick(const datetime m5_bar_open)
 
    ENUM_G3_SIDE side=G3H4Direction(h4);
    rec.side=side;
-   rec.f_h4_direction=(side!=G3_SIDE_NONE);
+   rec.h4_direction=(side!=G3_SIDE_NONE);
    if(side==G3_SIDE_NONE)
      {
       EmitRecord(rec,G3_R_NO_H4_DIRECTION);
       return;
      }
-   double slope=0.0;
-   G3H4SlopeValue(h4,slope);
-   rec.h4_slope_value=slope;
-   bool f_slope=false,f_adx=false;
-   rec.h4_score=G3H4Score(h4,side,f_slope,f_adx);
-   rec.f_h4_slope=f_slope;
-   rec.f_h4_adx=f_adx;
-   if(rec.h4_score<G3_H4_MIN_SCORE)
-     {
-      EmitRecord(rec,G3_R_H4_SCORE_BELOW_MIN);
-      return;
-     }
 
-   //--- ---------------- M15 reference bar ----------------
-   int m15_idx=-1;
-   datetime m15_time=0;
-   if(!G3ResolveHtfBar(_Symbol,PERIOD_M15,signal_close_time,G3_M15_HISTORY,m15_idx,m15_time))
-     {
-      EmitRecord(rec,G3_R_HTF_BAR_UNRESOLVED);
-      return;
-     }
-   rec.m15_bar_time=(long)m15_time;
-
-   double m15_ema20[],m15_ema50[],m15_atr[],m15_low[],m15_high[],m15_close[];
-   if(!CopyBufSeries(h_m15_ema20,0,m15_idx,4,m15_ema20) ||
-      !CopyBufSeries(h_m15_ema50,0,m15_idx,1,m15_ema50) ||
-      !CopyBufSeries(h_m15_atr,0,m15_idx,1,m15_atr))
-     {
-      EmitRecord(rec,G3_R_INDICATOR_NOT_READY);
-      return;
-     }
-   if(!CopyLowSeries(_Symbol,PERIOD_M15,m15_idx,3,m15_low) ||
-      !CopyHighSeries(_Symbol,PERIOD_M15,m15_idx,3,m15_high))
-     {
-      EmitRecord(rec,G3_R_DATA_UNAVAILABLE);
-      return;
-     }
-   ArraySetAsSeries(m15_close,true);
-   if(CopyClose(_Symbol,PERIOD_M15,m15_idx,1,m15_close)!=1)
-     {
-      EmitRecord(rec,G3_R_DATA_UNAVAILABLE);
-      return;
-     }
-
-   M15Input m15;
-   for(int k=0;k<3;k++)
-     {
-      m15.low[k]  =m15_low[k];
-      m15.high[k] =m15_high[k];
-      m15.ema20[k]=m15_ema20[k];
-     }
-   m15.close_s1=m15_close[0];
-   m15.ema20_s1=m15_ema20[0];
-   m15.ema20_s4=m15_ema20[3];
-   m15.ema50_s1=m15_ema50[0];
-   m15.atr14_s1=m15_atr[0];
-   rec.atr_m15 =m15.atr14_s1;
-
-   bool f_pull=false,f_struct=false;
-   rec.m15_score=G3M15Score(m15,side,f_pull,f_struct);
-   rec.f_m15_pullback=f_pull;
-   rec.f_m15_structure=f_struct;
-
-   //--- ---------------- M5 trigger ----------------
+   //--- ---------------- M5 breakout hard gate (7.1) -----------------
    double m5_atr[],m5_ema9[],m5_ema20[],m5_high[],m5_low[],m5_open[],m5_close[];
    if(!CopyBufSeries(h_m5_atr,0,1,1,m5_atr)    ||
       !CopyBufSeries(h_m5_ema9,0,1,4,m5_ema9)  ||
@@ -536,23 +582,68 @@ void EvaluateDecisionTick(const datetime m5_bar_open)
    m5.ema9_s4    =m5_ema9[3];
    m5.ema20_s1   =m5_ema20[0];
 
-   rec.f_m5_breakout=G3M5BreakoutFlag(m5,side);
-   if(!rec.f_m5_breakout)
+   rec.breakout_gate=G3M5BreakoutFlag(m5,side);
+   if(!rec.breakout_gate)
      {
       EmitRecord(rec,G3_R_M5_BREAKOUT_FAIL);
       return;
      }
-   bool f_candle=false,f_mom=false;
-   rec.m5_score=G3M5Score(m5,side,f_candle,f_mom);
-   rec.f_m5_candle=f_candle;
-   rec.f_m5_momentum=f_mom;
-   if(rec.m5_score<G3_M5_MIN_SCORE)
+
+   //--- ---------------- quality scores (5.2 / 6 / 7.2) --------------
+   bool f_slope=false,f_adx=false;
+   double slope=0.0;
+   G3H4SlopeValue(h4,slope);
+   rec.h4_slope_value=slope;
+   rec.h4_score=G3H4Score(h4,side,f_slope,f_adx);
+   rec.h4_slope=f_slope;
+   rec.h4_adx=f_adx;
+
+   double m15_ema20[],m15_ema50[],m15_atr[],m15_low[],m15_high[],m15_close[];
+   if(!CopyBufSeries(h_m15_ema20,0,m15_idx,4,m15_ema20) ||
+      !CopyBufSeries(h_m15_ema50,0,m15_idx,1,m15_ema50) ||
+      !CopyBufSeries(h_m15_atr,0,m15_idx,3,m15_atr))
      {
-      EmitRecord(rec,G3_R_M5_SCORE_BELOW_MIN);
+      EmitRecord(rec,G3_R_INDICATOR_NOT_READY);
+      return;
+     }
+   if(!CopyLowSeries(_Symbol,PERIOD_M15,m15_idx,3,m15_low) ||
+      !CopyHighSeries(_Symbol,PERIOD_M15,m15_idx,3,m15_high))
+     {
+      EmitRecord(rec,G3_R_DATA_UNAVAILABLE);
+      return;
+     }
+   ArraySetAsSeries(m15_close,true);
+   if(CopyClose(_Symbol,PERIOD_M15,m15_idx,1,m15_close)!=1)
+     {
+      EmitRecord(rec,G3_R_DATA_UNAVAILABLE);
       return;
      }
 
-   //--- ---------------- volatility / spread ----------------
+   M15Input m15;
+   for(int k=0;k<3;k++)
+     {
+      m15.low[k]  =m15_low[k];
+      m15.high[k] =m15_high[k];
+      m15.ema20[k]=m15_ema20[k];
+      m15.atr14[k]=m15_atr[k];      // same shift as Low/High (section 6)
+     }
+   m15.close_s1=m15_close[0];
+   m15.ema20_s1=m15_ema20[0];
+   m15.ema20_s4=m15_ema20[3];
+   m15.ema50_s1=m15_ema50[0];
+   rec.atr_m15 =m15_atr[0];
+
+   bool f_pull=false,f_struct=false;
+   rec.m15_score=G3M15Score(m15,side,f_pull,f_struct);
+   rec.m15_pullback=f_pull;
+   rec.m15_structure=f_struct;
+
+   bool f_candle=false,f_mom=false;
+   rec.m5_score=G3M5Score(m5,side,f_candle,f_mom);
+   rec.m5_candle=f_candle;
+   rec.m5_momentum=f_mom;
+
+   //--- volatility and spread quality (8.2 / 8.3)
    double atr_hist[];
    if(!CopyBufSeries(h_m5_atr,0,2,G3_ATR_MEDIAN_COUNT,atr_hist))
      {
@@ -571,8 +662,8 @@ void EvaluateDecisionTick(const datetime m5_bar_open)
      }
    rec.vol_ratio=vol_ratio;
    rec.vol_score=G3VolScore(vol_ratio);
-   rec.f_vol_point=(rec.vol_score==1);
-   rec.f_vol_block=G3VolBlocksEntry(vol_ratio);
+   rec.vol_point=(rec.vol_score==1);
+   rec.vol_block=G3VolBlocksEntry(vol_ratio);
 
    double spread_ratio=0.0;
    if(!G3SpreadRatio(mk.bid+spread_price,mk.bid,atr_s1,spread_ratio))
@@ -582,21 +673,24 @@ void EvaluateDecisionTick(const datetime m5_bar_open)
      }
    rec.spread_ratio=spread_ratio;
    rec.spread_score=G3SpreadScore(spread_ratio);
-   rec.f_spread_point=(rec.spread_score==1);
-   rec.f_spread_block=G3SpreadBlocksEntry(spread_ratio);
+   rec.spread_point=(rec.spread_score==1);
+   rec.spread_block=G3SpreadBlocksEntry(spread_ratio);
 
    rec.total_score=G3TotalScore(rec.h4_score,rec.m15_score,rec.m5_score,
                                 rec.vol_score,rec.spread_score);
    rec.score_threshold_effective=G3EffectiveScoreThreshold((int)InpScoreThreshold,
                                                            g_state.dd_state);
-   if(rec.f_vol_block)
+
+   //--- appendix A: minimum scores and the threshold are checked first,
+   //--- the volatility / spread hard filters immediately afterwards.
+   if(rec.h4_score<G3_H4_MIN_SCORE)
      {
-      EmitRecord(rec,G3_R_VOL_BLOCK);
+      EmitRecord(rec,G3_R_H4_SCORE_BELOW_MIN);
       return;
      }
-   if(rec.f_spread_block)
+   if(rec.m5_score<G3_M5_MIN_SCORE)
      {
-      EmitRecord(rec,G3_R_SPREAD_BLOCK);
+      EmitRecord(rec,G3_R_M5_SCORE_BELOW_MIN);
       return;
      }
    if(rec.total_score<rec.score_threshold_effective)
@@ -604,10 +698,21 @@ void EvaluateDecisionTick(const datetime m5_bar_open)
       EmitRecord(rec,G3_R_TOTAL_SCORE_BELOW_THRESHOLD);
       return;
      }
+   if(rec.vol_block)
+     {
+      EmitRecord(rec,G3_R_VOL_BLOCK);
+      return;
+     }
+   if(rec.spread_block)
+     {
+      EmitRecord(rec,G3_R_SPREAD_BLOCK);
+      return;
+     }
 
-   //--- ---------------- stop placement (section 9) ----------------
+   //--- ---------------- stop placement (section 9.1) ----------------
    double entry_price=(side==G3_SIDE_BUY)?mk.ask:mk.bid;
    rec.sl_raw=G3RawStop(side,lowest_1_5,highest_1_5,atr_s1);
+   rec.sl_raw_distance=MathAbs(entry_price-rec.sl_raw);
 
    double sl_strategy=0.0,sl_final=0.0;
    bool   adj_strategy=false,adj_broker=false;
@@ -634,9 +739,10 @@ void EvaluateDecisionTick(const datetime m5_bar_open)
      }
    sl_final=NormalizeDouble(sl_final,mk.digits);
    rec.sl_final=sl_final;
+   rec.sl_final_distance=MathAbs(entry_price-sl_final);
    rec.sl_broker_adjusted=adj_broker;
 
-   //--- ---------------- risk and lot (section 9) ----------------
+   //--- ---------------- risk and lot (section 9.2) ------------------
    double risk_pct=G3RiskPctForState(g_state.dd_state);
    double risk_money=G3RiskMoney(equity,risk_pct);
    rec.risk_pct=risk_pct;
@@ -648,11 +754,16 @@ void EvaluateDecisionTick(const datetime m5_bar_open)
       EmitRecord(rec,G3_R_ORDER_CALC_PROFIT_INVALID);
       return;
      }
-   rec.order_calc_profit_1lot=-loss_1lot;   // logged as the signed loss
+   rec.risk_1lot_calc=-loss_1lot;   // logged as the signed loss
+
+   //--- section 9.2: add the commission estimate to pre-trade risk.
+   double commission_per_lot=CommissionPerLotRoundTurn(_Symbol,InpMagic);
+   rec.commission_per_lot_est=commission_per_lot;
+   double risk_1lot_total=loss_1lot+commission_per_lot;
 
    double raw_lot=0.0,final_lot=0.0;
    bool capped=false;
-   if(!G3ComputeLot(risk_money,loss_1lot,mk.volume_step,mk.volume_min,
+   if(!G3ComputeLot(risk_money,risk_1lot_total,mk.volume_step,mk.volume_min,
                     mk.volume_max,raw_lot,final_lot,capped,reason))
      {
       rec.raw_lot=raw_lot;
@@ -663,7 +774,7 @@ void EvaluateDecisionTick(const datetime m5_bar_open)
    rec.final_lot=final_lot;
    rec.lot_capped_by_max=capped;
 
-   //--- ---------------- portfolio limits (section 12) --------------
+   //--- ---------------- portfolio limits (section 11.4) -------------
    bool locked=G3PortfolioLock(g_ctx,G3_LOCK_TIMEOUT_MS);
    if(!locked)
      {
@@ -673,7 +784,7 @@ void EvaluateDecisionTick(const datetime m5_bar_open)
 
    PortfolioSnapshot snap;
    G3BuildOpenSnapshot(InpMagic,equity,snap);
-   double candidate_risk_pct=(equity>0.0)?(final_lot*loss_1lot/equity*100.0):0.0;
+   double candidate_risk_pct=(equity>0.0)?(final_lot*risk_1lot_total/equity*100.0):0.0;
    int candidate_index=-1;
    if(snap.n<G3_MAX_LEGS)
      {
@@ -694,6 +805,7 @@ void EvaluateDecisionTick(const datetime m5_bar_open)
    rec.corr_cluster_risk_raw=pd.corr_cluster_risk_raw_pct;
    rec.unknown_cluster_risk =pd.unknown_cluster_risk_pct;
    rec.corr_state           =pd.corr_state;
+   rec.corr_unavailable     =(pd.corr_state==G3_CORR_WARMUP_UNKNOWN);
    rec.corr_warmup_days     =pd.corr_warmup_days;
    rec.open_positions       =pd.open_positions;
 
@@ -704,7 +816,7 @@ void EvaluateDecisionTick(const datetime m5_bar_open)
       return;
      }
 
-   //--- ---------------- execution (section 13) ----------------
+   //--- ---------------- execution (section 9.3) ---------------------
    DeviationPlan dev=G3BuildDeviationPlan(spread_price,atr_s1,mk.digits,mk.point);
    rec.deviation_computed=dev.computed_points;
    rec.deviation_hard_cap=dev.hard_cap_points;
@@ -728,7 +840,7 @@ void EvaluateDecisionTick(const datetime m5_bar_open)
    rec.record_type="ENTRY";
    rec.requested_price=oc.requested_price;
    rec.fill_price=oc.fill_price;
-   rec.slippage_points=oc.slippage_points;
+   rec.slippage=oc.slippage_points;
    rec.retcode=oc.retcode;
    if(!sent || !oc.filled)
      {
@@ -749,17 +861,18 @@ void EvaluateDecisionTick(const datetime m5_bar_open)
          position_ticket=(ulong)PositionGetInteger(POSITION_TICKET);
      }
 
-   //--- post-fill risk verification (section 13)
+   //--- post-fill risk verification (section 9.3)
    double loss_1lot_fill=0.0;
    double post_ratio=0.0;
    bool   exec_violation=false;
    if(G3LossForOneLot(_Symbol,side,oc.fill_price,sl_final,loss_1lot_fill))
      {
-      post_ratio=G3PostFillRiskRatio(loss_1lot_fill,oc.volume,risk_money);
+      double risk_1lot_fill=loss_1lot_fill+commission_per_lot;
+      post_ratio=G3PostFillRiskRatio(risk_1lot_fill,oc.volume,risk_money);
       if(post_ratio>G3_POST_FILL_RISK_MAX)
         {
          exec_violation=true;
-         double allowed=G3RiskCappedVolume(loss_1lot_fill,risk_money,mk.volume_step);
+         double allowed=G3RiskCappedVolume(risk_1lot_fill,risk_money,mk.volume_step);
          uint rc=0;
          if(allowed>=mk.volume_min && allowed<oc.volume)
            {
@@ -795,7 +908,7 @@ void EvaluateDecisionTick(const datetime m5_bar_open)
       t.initial_volume       =oc.volume;
       t.current_volume       =oc.volume;
       t.initial_risk_money   =risk_money;
-      t.initial_risk_pct     =(equity>0.0)?(oc.volume*loss_1lot/equity*100.0):0.0;
+      t.initial_risk_pct     =(equity>0.0)?(oc.volume*risk_1lot_total/equity*100.0):0.0;
       t.r_distance           =MathAbs(oc.fill_price-sl_final);
       t.atr_at_entry         =atr_s1;
       t.mfe_r=0.0;  t.mae_r=0.0;
@@ -841,16 +954,17 @@ void EmitExitRecord(const G3TradeState &t,const string exit_reason,
    rec.m5_bar_time   =t.entry_m5_bar;
    rec.fill_price    =t.entry_price;
    rec.sl_final      =t.initial_sl;
+   rec.sl_final_distance=t.r_distance;
    rec.final_lot     =t.initial_volume;
    rec.risk_money    =t.initial_risk_money;
    rec.risk_pct      =t.initial_risk_pct;
    rec.atr_m5        =t.atr_at_entry;
    rec.mfe_r         =t.mfe_r;
    rec.mae_r         =t.mae_r;
-   rec.mfe_r_3bars   =t.mfe_r_3bars;
-   rec.mae_r_3bars   =t.mae_r_3bars;
-   rec.mfe_r_6bars   =t.mfe_r_6bars;
-   rec.mae_r_6bars   =t.mae_r_6bars;
+   rec.mfe_3bars     =t.mfe_r_3bars;
+   rec.mae_3bars     =t.mae_r_3bars;
+   rec.mfe_6bars     =t.mfe_r_6bars;
+   rec.mae_6bars     =t.mae_r_6bars;
    rec.holding_bars  =t.bars_held;
    rec.exit_reason   =exit_reason;
    rec.result_r      =result_r;
@@ -924,8 +1038,11 @@ void ManagePositions()
    if(CopyBufSeries(h_m5_atr,0,1,1,atr_buf))
       atr_now=atr_buf[0];
 
-   double cost_price=(tick.ask-tick.bid)
-                     +MoneyPerLotToPrice(_Symbol,InpStressCommissionPerLot);
+   //--- Master Specification v0.4 section 10.2: the break-even cost is
+   //--- the incurred commission plus swap plus the estimated exit
+   //--- commission. The SPREAD IS NOT ADDED (DEV-004 fix): it is already
+   //--- contained in the Ask/Bid execution relationship.
+   double commission_round_turn=CommissionPerLotRoundTurn(_Symbol,InpMagic);
 
    bool dirty=false;
    for(int i=0;i<g_trade_count;i++)
@@ -999,6 +1116,27 @@ void ManagePositions()
             g_trades[i].partial_skipped=true;
             dirty=true;
            }
+        }
+
+      //--- break-even cost of this position (section 10.2)
+      double cost_price=0.0;
+      if(InpExitMode==G3_EXIT_B)
+        {
+         double swap_accrued=PositionGetDouble(POSITION_SWAP);
+         double commission_incurred=PositionCommissionIncurred(g_trades[i].ticket);
+         double per_leg_per_lot=0.0;
+         if(commission_incurred<0.0 && g_trades[i].initial_volume>0.0)
+            per_leg_per_lot=MathAbs(commission_incurred)/g_trades[i].initial_volume;
+         else
+            per_leg_per_lot=0.5*commission_round_turn;
+         //--- the exit commission is assumed equal to the entry side
+         //--- commission per lot (section 10.2 baseline).
+         double commission_exit_estimate=-per_leg_per_lot*g_trades[i].current_volume;
+         if(commission_incurred>=0.0 && per_leg_per_lot>0.0)
+            commission_incurred=-per_leg_per_lot*g_trades[i].initial_volume;
+         double cost_money=G3BreakevenCostMoney(commission_incurred,swap_accrued,
+                                                commission_exit_estimate);
+         cost_price=MoneyToPriceDistance(_Symbol,cost_money,g_trades[i].current_volume);
         }
 
       //--- stop management

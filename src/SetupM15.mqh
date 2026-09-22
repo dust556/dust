@@ -5,43 +5,51 @@
 //|  Shift convention: spec shift 1 is the M15 reference bar resolved |
 //|  by TimeSync (last bar fully closed at signal_close_time).        |
 //|  Spec shift k  ->  series index ref_index + (k-1).                |
+//|                                                                   |
+//|  DEV-001 fix: the pullback band uses the ATR14 of the SAME shift  |
+//|  as the Low/High being tested, not a single shift-1 ATR.          |
 //+------------------------------------------------------------------+
 #ifndef G3_SETUPM15_MQH
 #define G3_SETUPM15_MQH
 
 #include "G3Types.mqh"
 
+//--- Master Specification v0.4 section 16: M15 Pullback ATR baseline 0.20.
+#define G3_M15_PULLBACK_ATR 0.20
+
 struct M15Input
   {
    double            low[3];      // spec shifts 1,2,3
    double            high[3];     // spec shifts 1,2,3
    double            ema20[3];    // spec shifts 1,2,3 (same shift as low/high)
+   double            atr14[3];    // spec shifts 1,2,3 (same shift as low/high)
    double            close_s1;    // spec shift 1
    double            ema20_s1;
    double            ema20_s4;
    double            ema50_s1;
-   double            atr14_s1;    // ASSUMPTION A-03: ATR14 of spec shift 1
   };
 
 //+------------------------------------------------------------------+
 //| PURE                                                             |
 //+------------------------------------------------------------------+
 
-//--- Pullback, 1 point. Only spec shifts 1,2,3 are inspected.
-//---   BUY : any Low[k] <= EMA20[k] + 0.20*ATR  AND  Close[1] > EMA20[1]
-//---   SELL: any High[k] >= EMA20[k] - 0.20*ATR AND  Close[1] < EMA20[1]
+//--- Pullback, 1 point. Only spec shifts 1,2,3 are inspected, and each
+//--- Low/High is compared against the EMA20 AND the ATR14 OF THE SAME
+//--- SHIFT (Master Specification v0.4 section 6:
+//--- "各Low/Highは同じshiftのEMA20/ATRと比較し").
+//---   BUY : any Low[k] <= EMA20[k] + 0.20*ATR[k]  AND  Close[1] > EMA20[1]
+//---   SELL: any High[k] >= EMA20[k] - 0.20*ATR[k] AND  Close[1] < EMA20[1]
 bool G3M15PullbackFlag(const M15Input &in,const ENUM_G3_SIDE side)
   {
-   if(in.atr14_s1<=0.0)
-      return(false);
-   double band=0.20*in.atr14_s1;
    if(side==G3_SIDE_BUY)
      {
       if(!(in.close_s1>in.ema20_s1))
          return(false);
       for(int k=0;k<3;k++)
         {
-         if(in.low[k]<=in.ema20[k]+band)
+         if(in.atr14[k]<=0.0)
+            continue;
+         if(in.low[k]<=in.ema20[k]+G3_M15_PULLBACK_ATR*in.atr14[k])
             return(true);
         }
       return(false);
@@ -52,7 +60,9 @@ bool G3M15PullbackFlag(const M15Input &in,const ENUM_G3_SIDE side)
          return(false);
       for(int k=0;k<3;k++)
         {
-         if(in.high[k]>=in.ema20[k]-band)
+         if(in.atr14[k]<=0.0)
+            continue;
+         if(in.high[k]>=in.ema20[k]-G3_M15_PULLBACK_ATR*in.atr14[k])
             return(true);
         }
       return(false);

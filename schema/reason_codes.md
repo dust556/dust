@@ -20,6 +20,7 @@ Generated from `ENUM_G3_REASON` in `src/G3Types.mqh` by
 | `SPREAD_BLOCK` | 8 | SpreadRatio > 0.20: new entries forbidden |
 | `DATA_UNAVAILABLE` | 4.1 | price history or tick data could not be read |
 | `HTF_BAR_UNRESOLVED` | 4.1 | no H4/M15 bar is fully closed at signal_close_time, or history depth is insufficient |
+| `POST_GAP_COOLDOWN` | 4.2 | the H4 reference bar is the first bar completed after a gap wider than twice the period; no new signal is issued |
 | `INDICATOR_NOT_READY` | 5-8 | an indicator buffer has not produced enough values yet |
 | `SIGNAL_ALREADY_CONSUMED` | 4.1 | the signal_id was consumed before; duplicate orders are refused |
 | `STATE_UNCERTAIN` | 10 | both state stores are unrecoverable; all new entries are refused |

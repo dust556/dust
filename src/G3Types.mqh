@@ -107,6 +107,7 @@ enum ENUM_G3_REASON
    //--- data / synchronisation
    G3_R_DATA_UNAVAILABLE,
    G3_R_HTF_BAR_UNRESOLVED,
+   G3_R_POST_GAP_COOLDOWN,
    G3_R_INDICATOR_NOT_READY,
    G3_R_SIGNAL_ALREADY_CONSUMED,
    //--- risk / state
@@ -157,6 +158,7 @@ string G3ReasonToString(const ENUM_G3_REASON r)
       case G3_R_SPREAD_BLOCK:                   return("SPREAD_BLOCK");
       case G3_R_DATA_UNAVAILABLE:               return("DATA_UNAVAILABLE");
       case G3_R_HTF_BAR_UNRESOLVED:             return("HTF_BAR_UNRESOLVED");
+      case G3_R_POST_GAP_COOLDOWN:              return("POST_GAP_COOLDOWN");
       case G3_R_INDICATOR_NOT_READY:            return("INDICATOR_NOT_READY");
       case G3_R_SIGNAL_ALREADY_CONSUMED:        return("SIGNAL_ALREADY_CONSUMED");
       case G3_R_STATE_UNCERTAIN:                return("STATE_UNCERTAIN");
@@ -215,6 +217,26 @@ string G3CorrStateToString(const ENUM_G3_CORR_STATE s)
   {
    if(s==G3_CORR_READY) return("CORR_READY");
    return("CORR_WARMUP_UNKNOWN");
+  }
+
+//--- Master Specification v0.4 section 12 names exactly three values for
+//--- the state_store_status log field. The richer internal status is
+//--- logged separately as state_store_detail.
+string G3StoreStatusToSpec(const ENUM_G3_STORE_STATUS s)
+  {
+   switch(s)
+     {
+      case G3_STORE_OK:
+      case G3_STORE_FRESH:
+         return("OK");
+      case G3_STORE_FILE_ONLY:
+      case G3_STORE_GV_ONLY:
+      case G3_STORE_MISMATCH:
+         return("RECOVERED");
+      case G3_STORE_BOTH_LOST:
+         return("UNCERTAIN");
+     }
+   return("UNCERTAIN");
   }
 
 string G3StoreStatusToString(const ENUM_G3_STORE_STATUS s)
