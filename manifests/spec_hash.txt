@@ -1,0 +1,4 @@
+# SHA-256 of Master Specification v0.4 (authority document)
+# The document was not supplied to this environment, so the hash
+# cannot be computed here. See docs/change_requests.md CR-001.
+SPEC_HASH=PENDING_SPEC_DOCUMENT

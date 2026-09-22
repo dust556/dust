@@ -1,0 +1,6 @@
+# SHA-256 of the compiled G3_ResearchEA.ex5
+# Cannot be produced here: MetaEditor / MQL5 is not available in
+# this environment. Fill this in from the machine that compiles the EA:
+#   sha256sum G3_ResearchEA.ex5
+EA_HASH=PENDING_METAEDITOR_COMPILE
+SOURCE_HASH=59b5da9afa41627dbb243090a37883c064266ccd8b5f2b5f59902d48ab295c61

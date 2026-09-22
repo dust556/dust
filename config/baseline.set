@@ -1,0 +1,11 @@
+; G3 Research EA - baseline configuration
+; Master Specification v0.4 baseline: ScoreThreshold = 5, ExitMode A,
+; Timeout OFF, no execution stress.
+InpScoreThreshold=5
+InpExitMode=0
+InpTimeout=0
+InpStressExtraSpreadPoints=0
+InpStressCommissionPerLot=0.0
+InpMagic=940400
+InpRunId=BASELINE
+InpManualHardStopReset=false

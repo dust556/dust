@@ -1,0 +1,11 @@
+; G3 Research EA - ScoreThreshold sweep configuration
+; Master Specification v0.4 section 8 (baseline ScoreThreshold = 5)
+; Only the pre-registered G3 inputs are present. Do not add parameters.
+InpScoreThreshold=6
+InpExitMode=0
+InpTimeout=0
+InpStressExtraSpreadPoints=0
+InpStressCommissionPerLot=0.0
+InpMagic=940400
+InpRunId=SCORE6
+InpManualHardStopReset=false

@@ -1,0 +1,62 @@
+{
+  "artifact": "G3 Research EA",
+  "spec_authority": "Master Specification v0.4",
+  "ea_version": "0.4.0-research",
+  "generated_utc": "2026-09-22T04:59:08Z",
+  "groups": {
+    "source": {
+      "src/ExitManager.mqh": "816db19f8875e90304feef954062b4926011447faf01b06aabe19dfc68c32f40",
+      "src/G3Types.mqh": "3a38670e7d8780c172f91d7d2d424f5a9289b54e90453acbf7844b200f218c36",
+      "src/G3_ResearchEA.mq5": "d621e5128a25a293fa3b75970c5c81861e8eb551aefc1b127bc0864ca74541c4",
+      "src/MarketFilters.mqh": "39f6aedcafbd24eae98c3fe4ad0a142640ec997a95e5aeee6f1545f77ffd248a",
+      "src/OrderManager.mqh": "36fb697d158827da9c54fe98c4aacef36b3021f096f2794fdf92b629c5e0e518",
+      "src/PortfolioManager.mqh": "c3875dfa07d162ca41b1edb908c19e50f65386dfb8f20e75e887c4ca70fd6c19",
+      "src/ResearchLogger.mqh": "c5972024a11d64aa7d7dd7a83a02f1a1ceeb7fb491a3f7c6f752d5c27083c80e",
+      "src/RiskManager.mqh": "98a58f2bd9d2a3baf615ac9d6b9a64e625288dace268e7092f40e35e52383592",
+      "src/SetupM15.mqh": "f4966269b8b335cda9f94c24e43f331c15e3e76ea0d8a06df6d51adccf15cd71",
+      "src/SignalH4.mqh": "96b30def5e5fa4df42e05015d8ea39abe7ac359720823253f3c50df12d43655c",
+      "src/StateStore.mqh": "15f2ee22ac41017889d1da886827014bad06fedb62e461b1888be8977b52aee5",
+      "src/TimeSync.mqh": "4261434688529bec3d9c3c7d9788a4035f51f237043ea23ac88509af1b361f76",
+      "src/TriggerM5.mqh": "038464f2dc2785fb12005f4f8c2357b7ca02ca06153938fbefc774a6fa3a1656"
+    },
+    "config": {
+      "config/baseline.set": "d991d9ee787bce9f4f63e34c632a673afd1293b92c89940d5b651ca89438541b",
+      "config/score_4.set": "ad983ed30a15be047129a5bb067886189388bd94de2e124875a70a06b074c157",
+      "config/score_5.set": "ee4b4ce4bbeeacd9b5060c96ffb69300df1eb164c159b096cf224c0bbad90973",
+      "config/score_6.set": "3128fced4f1fdeba774ba3573ef30b4b4a01a780cf450c07d093c4fa2ecd0432"
+    },
+    "schema": {
+      "schema/reason_codes.md": "47e04eb0b5b08a93509bff8abcc508a647ae319842e5fe2216911c695a6c7ca1",
+      "schema/research_log_schema.md": "3505528dfe233b6ee5c49334a13c2e2bc907da0e215e9e093538f697046f47d8"
+    },
+    "tests": {
+      "tests/host/mql5_shim.h": "a8329fc0f159007b65919df8a0b7466cffd9bec513b4447694bc42feee67967f",
+      "tests/host/test_main.cpp": "7dfdf21c9d559d5f6180e5c9c9c645faac94914f500681d8aaf6a484b4de89f3",
+      "tests/integration_test_plan.md": "c6d247435aadaa2fb57f19f65d2674fa9c923c2a96fc331f27897ea1c1e7e4b0",
+      "tests/known_scenarios.md": "d44ac8429c0273a0edc46054fe0c728d029b34f3bb730e1cdb931964f3ac792a",
+      "tests/unit_test_plan.md": "3fabef10d022b993d4bb30bb11e6a35d24ae32f7f82e5d95b3a14f8a72ce2cb7"
+    },
+    "tools": {
+      "tools/compute_hashes.py": "f2e143800f0406c518a319821f793ef9147a7ac050eccb9efd1f9944336a6f18",
+      "tools/gen_log_schema.py": "c7b021921feff5be70c811afd947f37c497b2b519183716feff22316902b2db3",
+      "tools/gen_reason_codes.py": "6cec89d83641414b2c26d7e0bd5915be9042bee2c031c94f5ba1724573a914a7",
+      "tools/gen_unit_test_plan.py": "ef678d905764bfe56e91fba9adedf98bc4c768aab8e17d5815ee88b7a2847e12",
+      "tools/mql5_static_check.py": "2f2acc214e26ed758cf1b5f66e4b9c397264e1d1ac48c65cef8073b43e33e328"
+    }
+  },
+  "aggregate": {
+    "source_hash": "59b5da9afa41627dbb243090a37883c064266ccd8b5f2b5f59902d48ab295c61",
+    "config_hash": "37c820c795a23d9c30a11b19d8bd811f0bbd0c255819b86695a1c8dd1d2ebe5e",
+    "schema_hash": "b85614847bd45afd3fb43d5592e4dd6bb3b4dccecb7f150960ff7d666489d168",
+    "tests_hash": "a9f2a30fae6d9f68d904f7c3feed0d28c3837eed824753092569b2eac99e2cf0",
+    "tools_hash": "9b95a6fcbe8c2701bee45dd6b5459aafc78818f738b052612c56be7296d9cb79",
+    "release_hash": "d47ec0a8955f41bcc88afaac47a6f510b38a885064d666561ff6545abe131f65"
+  },
+  "ea_hash": "PENDING_METAEDITOR_COMPILE",
+  "spec_hash": "PENDING_SPEC_DOCUMENT",
+  "notes": [
+    "ea_hash is the SHA-256 of the compiled .ex5 and can only be produced by a MetaEditor build; this repository has no MQL5 toolchain.",
+    "spec_hash is the SHA-256 of the Master Specification v0.4 document, which was not supplied to the implementation environment.",
+    "No Final Holdout data, path or artifact is referenced anywhere."
+  ]
+}
