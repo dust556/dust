@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smallcap-screener"
+version = "1.0.0"
+description = "US small-cap quantitative screening engine (five-condition research screen)"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+
+# The core engine is stdlib-only on purpose: a research tool that runs
+# anywhere, with no dependency drift between the run that produced a result
+# and the run that reproduces it years later.
+dependencies = []
+
+[project.optional-dependencies]
+# The qualitative review layer. The screen runs identically without it.
+ai = ["anthropic>=0.40"]
+# YAML config files; JSON works with no extra dependency.
+yaml = ["PyYAML>=6.0"]
+
+[project.scripts]
+smallcap = "smallcap.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"

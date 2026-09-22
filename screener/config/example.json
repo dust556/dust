@@ -1,0 +1,39 @@
+{
+  "_comment": [
+    "A stricter variant of the default screen: higher quality bar, lower",
+    "leverage tolerance. Pass with --config, or override single values on",
+    "the command line with --set returns.min_roic=0.20.",
+    "Every field is optional; anything omitted keeps its default."
+  ],
+  "as_of": null,
+  "market_cap": {
+    "min_usd": 500000000.0,
+    "max_usd": 3000000000.0
+  },
+  "gross_margin": {
+    "min_level": 0.45,
+    "min_slope_per_year": 0.005,
+    "trend_periods": 5
+  },
+  "returns": {
+    "min_roic": 0.15,
+    "min_roic_minus_wacc": 0.03,
+    "min_reinvestment_rate": 0.35,
+    "min_implied_growth": 0.07,
+    "risk_free_rate": 0.042,
+    "equity_risk_premium": 0.055,
+    "size_premium": 0.020
+  },
+  "leverage": {
+    "max_debt_to_ebitda": 2.5,
+    "use_net_debt": false
+  },
+  "insider": {
+    "min_ownership": 0.10,
+    "include_ten_percent_owners": false
+  },
+  "scoring": {
+    "require_all_pass": true,
+    "min_data_quality": 0.80
+  }
+}

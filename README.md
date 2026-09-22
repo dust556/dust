@@ -31,6 +31,12 @@ Final Holdout data.
 
 See `docs/G4_compile_report.md` and `docs/change_requests.md`.
 
+## Other subsystems
+
+`screener/` is a separate, self-contained project: a US small-cap equity
+screening engine built on SEC EDGAR filing data. It shares no code with the
+EA. See `screener/README.md`.
+
 ## Running the checks
 
 ```sh

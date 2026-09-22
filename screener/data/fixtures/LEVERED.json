@@ -1,0 +1,866 @@
+{
+  "cik": "0789258067",
+  "exchange": "Nasdaq",
+  "insiders": {
+    "as_of": "2026-02-01",
+    "basis": "form345",
+    "holdings": [
+      {
+        "as_of": "2026-02-01",
+        "is_director": true,
+        "is_officer": true,
+        "owner_cik": "0270485464",
+        "owner_name": "Founder, Chief Executive",
+        "shares": 3932500.0
+      },
+      {
+        "as_of": "2026-02-01",
+        "is_director": false,
+        "is_officer": true,
+        "owner_cik": "2564423538",
+        "owner_name": "Chief Financial Officer",
+        "shares": 1787500.0
+      },
+      {
+        "as_of": "2026-02-01",
+        "is_director": true,
+        "is_officer": false,
+        "owner_cik": "4564301285",
+        "owner_name": "Director A",
+        "shares": 858000.0
+      },
+      {
+        "as_of": "2026-02-01",
+        "is_director": true,
+        "is_officer": false,
+        "owner_cik": "2750602350",
+        "owner_name": "Director B",
+        "shares": 572000.0
+      }
+    ],
+    "notes": []
+  },
+  "market": {
+    "beta": 1.1,
+    "history": [
+      {
+        "close": 14.0139,
+        "date": "2024-04-05"
+      },
+      {
+        "close": 14.6369,
+        "date": "2024-04-12"
+      },
+      {
+        "close": 14.6306,
+        "date": "2024-04-19"
+      },
+      {
+        "close": 14.624,
+        "date": "2024-04-26"
+      },
+      {
+        "close": 14.6171,
+        "date": "2024-05-03"
+      },
+      {
+        "close": 14.6101,
+        "date": "2024-05-10"
+      },
+      {
+        "close": 14.6028,
+        "date": "2024-05-17"
+      },
+      {
+        "close": 14.5953,
+        "date": "2024-05-24"
+      },
+      {
+        "close": 14.5876,
+        "date": "2024-05-31"
+      },
+      {
+        "close": 14.5796,
+        "date": "2024-06-07"
+      },
+      {
+        "close": 14.5714,
+        "date": "2024-06-14"
+      },
+      {
+        "close": 14.563,
+        "date": "2024-06-21"
+      },
+      {
+        "close": 15.2104,
+        "date": "2024-06-28"
+      },
+      {
+        "close": 15.2038,
+        "date": "2024-07-05"
+      },
+      {
+        "close": 15.1969,
+        "date": "2024-07-12"
+      },
+      {
+        "close": 15.1898,
+        "date": "2024-07-19"
+      },
+      {
+        "close": 15.1825,
+        "date": "2024-07-26"
+      },
+      {
+        "close": 15.175,
+        "date": "2024-08-02"
+      },
+      {
+        "close": 15.1672,
+        "date": "2024-08-09"
+      },
+      {
+        "close": 15.1591,
+        "date": "2024-08-16"
+      },
+      {
+        "close": 15.1508,
+        "date": "2024-08-23"
+      },
+      {
+        "close": 15.1423,
+        "date": "2024-08-30"
+      },
+      {
+        "close": 15.1335,
+        "date": "2024-09-06"
+      },
+      {
+        "close": 15.8064,
+        "date": "2024-09-13"
+      },
+      {
+        "close": 15.7995,
+        "date": "2024-09-20"
+      },
+      {
+        "close": 15.7924,
+        "date": "2024-09-27"
+      },
+      {
+        "close": 15.785,
+        "date": "2024-10-04"
+      },
+      {
+        "close": 15.7774,
+        "date": "2024-10-11"
+      },
+      {
+        "close": 15.7695,
+        "date": "2024-10-18"
+      },
+      {
+        "close": 15.7614,
+        "date": "2024-10-25"
+      },
+      {
+        "close": 15.7531,
+        "date": "2024-11-01"
+      },
+      {
+        "close": 15.7445,
+        "date": "2024-11-08"
+      },
+      {
+        "close": 15.7356,
+        "date": "2024-11-15"
+      },
+      {
+        "close": 15.7265,
+        "date": "2024-11-22"
+      },
+      {
+        "close": 16.4257,
+        "date": "2024-11-29"
+      },
+      {
+        "close": 16.4185,
+        "date": "2024-12-06"
+      },
+      {
+        "close": 16.4111,
+        "date": "2024-12-13"
+      },
+      {
+        "close": 16.4035,
+        "date": "2024-12-20"
+      },
+      {
+        "close": 16.3956,
+        "date": "2024-12-27"
+      },
+      {
+        "close": 16.3874,
+        "date": "2025-01-03"
+      },
+      {
+        "close": 16.379,
+        "date": "2025-01-10"
+      },
+      {
+        "close": 16.3703,
+        "date": "2025-01-17"
+      },
+      {
+        "close": 16.3613,
+        "date": "2025-01-24"
+      },
+      {
+        "close": 16.3521,
+        "date": "2025-01-31"
+      },
+      {
+        "close": 16.3427,
+        "date": "2025-02-07"
+      },
+      {
+        "close": 17.0692,
+        "date": "2025-02-14"
+      },
+      {
+        "close": 17.0618,
+        "date": "2025-02-21"
+      },
+      {
+        "close": 17.0541,
+        "date": "2025-02-28"
+      },
+      {
+        "close": 17.0462,
+        "date": "2025-03-07"
+      },
+      {
+        "close": 17.038,
+        "date": "2025-03-14"
+      },
+      {
+        "close": 17.0295,
+        "date": "2025-03-21"
+      },
+      {
+        "close": 17.0207,
+        "date": "2025-03-28"
+      },
+      {
+        "close": 17.0117,
+        "date": "2025-04-04"
+      },
+      {
+        "close": 17.0024,
+        "date": "2025-04-11"
+      },
+      {
+        "close": 16.9928,
+        "date": "2025-04-18"
+      },
+      {
+        "close": 16.983,
+        "date": "2025-04-25"
+      },
+      {
+        "close": 17.738,
+        "date": "2025-05-02"
+      },
+      {
+        "close": 17.7303,
+        "date": "2025-05-09"
+      },
+      {
+        "close": 17.7223,
+        "date": "2025-05-16"
+      },
+      {
+        "close": 17.7141,
+        "date": "2025-05-23"
+      },
+      {
+        "close": 17.7055,
+        "date": "2025-05-30"
+      },
+      {
+        "close": 17.6967,
+        "date": "2025-06-06"
+      },
+      {
+        "close": 17.6876,
+        "date": "2025-06-13"
+      },
+      {
+        "close": 17.6782,
+        "date": "2025-06-20"
+      },
+      {
+        "close": 17.6686,
+        "date": "2025-06-27"
+      },
+      {
+        "close": 17.6586,
+        "date": "2025-07-04"
+      },
+      {
+        "close": 17.6484,
+        "date": "2025-07-11"
+      },
+      {
+        "close": 18.433,
+        "date": "2025-07-18"
+      },
+      {
+        "close": 18.425,
+        "date": "2025-07-25"
+      },
+      {
+        "close": 18.4167,
+        "date": "2025-08-01"
+      },
+      {
+        "close": 18.4081,
+        "date": "2025-08-08"
+      },
+      {
+        "close": 18.3992,
+        "date": "2025-08-15"
+      },
+      {
+        "close": 18.3901,
+        "date": "2025-08-22"
+      },
+      {
+        "close": 18.3806,
+        "date": "2025-08-29"
+      },
+      {
+        "close": 18.3709,
+        "date": "2025-09-05"
+      },
+      {
+        "close": 18.3608,
+        "date": "2025-09-12"
+      },
+      {
+        "close": 18.3505,
+        "date": "2025-09-19"
+      },
+      {
+        "close": 18.3399,
+        "date": "2025-09-26"
+      },
+      {
+        "close": 19.1552,
+        "date": "2025-10-03"
+      },
+      {
+        "close": 19.1469,
+        "date": "2025-10-10"
+      },
+      {
+        "close": 19.1383,
+        "date": "2025-10-17"
+      },
+      {
+        "close": 19.1294,
+        "date": "2025-10-24"
+      },
+      {
+        "close": 19.1201,
+        "date": "2025-10-31"
+      },
+      {
+        "close": 19.1106,
+        "date": "2025-11-07"
+      },
+      {
+        "close": 19.1008,
+        "date": "2025-11-14"
+      },
+      {
+        "close": 19.0907,
+        "date": "2025-11-21"
+      },
+      {
+        "close": 19.0802,
+        "date": "2025-11-28"
+      },
+      {
+        "close": 19.0695,
+        "date": "2025-12-05"
+      },
+      {
+        "close": 19.0584,
+        "date": "2025-12-12"
+      },
+      {
+        "close": 19.9058,
+        "date": "2025-12-19"
+      },
+      {
+        "close": 19.8971,
+        "date": "2025-12-26"
+      },
+      {
+        "close": 19.8881,
+        "date": "2026-01-02"
+      },
+      {
+        "close": 19.8789,
+        "date": "2026-01-09"
+      },
+      {
+        "close": 19.8693,
+        "date": "2026-01-16"
+      },
+      {
+        "close": 19.8594,
+        "date": "2026-01-23"
+      },
+      {
+        "close": 19.8492,
+        "date": "2026-01-30"
+      },
+      {
+        "close": 19.8386,
+        "date": "2026-02-06"
+      },
+      {
+        "close": 19.8278,
+        "date": "2026-02-13"
+      },
+      {
+        "close": 19.8167,
+        "date": "2026-02-20"
+      },
+      {
+        "close": 19.8052,
+        "date": "2026-02-27"
+      },
+      {
+        "close": 20.6857,
+        "date": "2026-03-06"
+      },
+      {
+        "close": 20.6767,
+        "date": "2026-03-13"
+      },
+      {
+        "close": 20.6674,
+        "date": "2026-03-20"
+      },
+      {
+        "close": 20.6577,
+        "date": "2026-03-27"
+      }
+    ],
+    "price": 19.0,
+    "price_date": "2026-03-31",
+    "shares_date": "2026-02-20",
+    "shares_outstanding": 55000000.0,
+    "ticker": "LEVERED"
+  },
+  "name": "Roll-Up Holdings",
+  "periods": [
+    {
+      "acquisitions": 25000000.0,
+      "capex": 30000000.0,
+      "cash_and_equivalents": 25000000.0,
+      "cost_of_revenue": 270000000.0,
+      "current_assets": 157000000.0,
+      "current_liabilities": 60000000.0,
+      "depreciation_amortization": 20000000.0,
+      "duration_days": 365,
+      "end": "2020-12-31",
+      "filed": "2021-02-20",
+      "form": "10-K",
+      "fp": "FY",
+      "fy": 2020,
+      "gross_profit": 230000000.0,
+      "income_tax_expense": 9870000.0,
+      "interest_expense": 63000000.0,
+      "long_term_debt": 945000000.0,
+      "net_income": 37130000.0,
+      "operating_cash_flow": 57130000.0,
+      "operating_income": 110000000.0,
+      "pretax_income": 47000000.0,
+      "revenue": 500000000.0,
+      "short_term_debt": 105000000.0,
+      "short_term_investments": 0.0,
+      "total_assets": 1260000000.0,
+      "total_equity": 150000000.0
+    },
+    {
+      "acquisitions": 28000000.0,
+      "capex": 33600000.0,
+      "cash_and_equivalents": 25000000.0,
+      "cost_of_revenue": 297920000.0,
+      "current_assets": 172840000.0,
+      "current_liabilities": 67200000.0,
+      "depreciation_amortization": 22400000.0,
+      "duration_days": 365,
+      "end": "2021-12-31",
+      "filed": "2022-02-20",
+      "form": "10-K",
+      "fp": "FY",
+      "fy": 2021,
+      "gross_profit": 262080000.0,
+      "income_tax_expense": 13582800.0,
+      "interest_expense": 63000000.0,
+      "long_term_debt": 945000000.0,
+      "net_income": 51097200.0,
+      "operating_cash_flow": 73497200.0,
+      "operating_income": 127680000.0,
+      "pretax_income": 64680000.0,
+      "revenue": 560000000.0,
+      "short_term_debt": 105000000.0,
+      "short_term_investments": 0.0,
+      "total_assets": 1300617000.0,
+      "total_equity": 183417000.0
+    },
+    {
+      "acquisitions": 31360000.0,
+      "capex": 37632000.0,
+      "cash_and_equivalents": 25000000.0,
+      "cost_of_revenue": 328652800.0,
+      "current_assets": 190580800.0,
+      "current_liabilities": 75264000.0,
+      "depreciation_amortization": 25088000.0,
+      "duration_days": 365,
+      "end": "2022-12-31",
+      "filed": "2023-02-20",
+      "form": "10-K",
+      "fp": "FY",
+      "fy": 2022,
+      "gross_profit": 298547200.0,
+      "income_tax_expense": 17854032.0,
+      "interest_expense": 63000000.0,
+      "long_term_debt": 945000000.0,
+      "net_income": 67165168.0,
+      "operating_cash_flow": 92253168.0,
+      "operating_income": 148019200.0,
+      "pretax_income": 85019200.0,
+      "revenue": 627200000.0,
+      "short_term_debt": 105000000.0,
+      "short_term_investments": 0.0,
+      "total_assets": 1354668480.0,
+      "total_equity": 229404480.0
+    },
+    {
+      "acquisitions": 35123200.0,
+      "capex": 42147840.0,
+      "cash_and_equivalents": 25000000.0,
+      "cost_of_revenue": 362471424.0,
+      "current_assets": 210450496.0,
+      "current_liabilities": 84295680.0,
+      "depreciation_amortization": 28098560.0,
+      "duration_days": 365,
+      "end": "2023-12-31",
+      "filed": "2024-02-20",
+      "form": "10-K",
+      "fp": "FY",
+      "fy": 2023,
+      "gross_profit": 339992576.0,
+      "income_tax_expense": 22764255.36,
+      "interest_expense": 63000000.0,
+      "long_term_debt": 945000000.0,
+      "net_income": 85636960.64,
+      "operating_cash_flow": 113735520.64,
+      "operating_income": 171401216.0,
+      "pretax_income": 108401216.0,
+      "revenue": 702464000.0,
+      "short_term_debt": 105000000.0,
+      "short_term_investments": 0.0,
+      "total_assets": 1424148811.2,
+      "total_equity": 289853131.2
+    },
+    {
+      "acquisitions": 39337984.0,
+      "capex": 47205580.8,
+      "cash_and_equivalents": 25000000.0,
+      "cost_of_revenue": 399673917.44,
+      "current_assets": 232704555.52,
+      "current_liabilities": 94411161.6,
+      "depreciation_amortization": 31470387.2,
+      "duration_days": 365,
+      "end": "2024-12-31",
+      "filed": "2025-02-20",
+      "form": "10-K",
+      "fp": "FY",
+      "fy": 2024,
+      "gross_profit": 387085762.56,
+      "income_tax_expense": 28405322.27,
+      "interest_expense": 63000000.0,
+      "long_term_debt": 945000000.0,
+      "net_income": 106858117.09,
+      "operating_cash_flow": 138328504.29,
+      "operating_income": 198263439.36,
+      "pretax_income": 135263439.36,
+      "revenue": 786759680.0,
+      "short_term_debt": 105000000.0,
+      "short_term_investments": 0.0,
+      "total_assets": 1511337557.38,
+      "total_equity": 366926395.78
+    },
+    {
+      "acquisitions": 44058542.08,
+      "capex": 52870250.5,
+      "cash_and_equivalents": 25000000.0,
+      "cost_of_revenue": 440585420.8,
+      "current_assets": 257629102.18,
+      "current_liabilities": 105740500.99,
+      "depreciation_amortization": 35246833.66,
+      "duration_days": 365,
+      "end": "2025-12-31",
+      "filed": "2026-02-20",
+      "form": "10-K",
+      "fp": "FY",
+      "fy": 2025,
+      "gross_profit": 440585420.8,
+      "income_tax_expense": 34881927.95,
+      "interest_expense": 63000000.0,
+      "long_term_debt": 945000000.0,
+      "net_income": 131222490.86,
+      "operating_cash_flow": 166469324.53,
+      "operating_income": 229104418.82,
+      "pretax_income": 166104418.82,
+      "revenue": 881170841.6,
+      "short_term_debt": 105000000.0,
+      "short_term_investments": 0.0,
+      "total_assets": 1618839202.15,
+      "total_equity": 463098701.16
+    },
+    {
+      "acquisitions": 9834496.0,
+      "capex": 11801395.2,
+      "cash_and_equivalents": 25000000.0,
+      "cost_of_revenue": 99918479.36,
+      "current_assets": 232704555.52,
+      "current_liabilities": 94411161.6,
+      "depreciation_amortization": 7867596.8,
+      "duration_days": 91,
+      "end": "2024-03-31",
+      "filed": "2024-05-10",
+      "form": "10-Q",
+      "fp": "Q1",
+      "fy": 2024,
+      "gross_profit": 96771440.64,
+      "income_tax_expense": 7101330.57,
+      "interest_expense": 15750000.0,
+      "long_term_debt": 945000000.0,
+      "net_income": 26714529.27,
+      "operating_cash_flow": 34582126.07,
+      "operating_income": 49565859.84,
+      "pretax_income": 33815859.84,
+      "revenue": 196689920.0,
+      "short_term_debt": 105000000.0,
+      "short_term_investments": 0.0,
+      "total_assets": 1511337557.38,
+      "total_equity": 366926395.78
+    },
+    {
+      "acquisitions": 9834496.0,
+      "capex": 11801395.2,
+      "cash_and_equivalents": 25000000.0,
+      "cost_of_revenue": 99918479.36,
+      "current_assets": 232704555.52,
+      "current_liabilities": 94411161.6,
+      "depreciation_amortization": 7867596.8,
+      "duration_days": 91,
+      "end": "2024-06-30",
+      "filed": "2024-08-09",
+      "form": "10-Q",
+      "fp": "Q2",
+      "fy": 2024,
+      "gross_profit": 96771440.64,
+      "income_tax_expense": 7101330.57,
+      "interest_expense": 15750000.0,
+      "long_term_debt": 945000000.0,
+      "net_income": 26714529.27,
+      "operating_cash_flow": 34582126.07,
+      "operating_income": 49565859.84,
+      "pretax_income": 33815859.84,
+      "revenue": 196689920.0,
+      "short_term_debt": 105000000.0,
+      "short_term_investments": 0.0,
+      "total_assets": 1511337557.38,
+      "total_equity": 366926395.78
+    },
+    {
+      "acquisitions": 9834496.0,
+      "capex": 11801395.2,
+      "cash_and_equivalents": 25000000.0,
+      "cost_of_revenue": 99918479.36,
+      "current_assets": 232704555.52,
+      "current_liabilities": 94411161.6,
+      "depreciation_amortization": 7867596.8,
+      "duration_days": 91,
+      "end": "2024-09-30",
+      "filed": "2024-11-09",
+      "form": "10-Q",
+      "fp": "Q3",
+      "fy": 2024,
+      "gross_profit": 96771440.64,
+      "income_tax_expense": 7101330.57,
+      "interest_expense": 15750000.0,
+      "long_term_debt": 945000000.0,
+      "net_income": 26714529.27,
+      "operating_cash_flow": 34582126.07,
+      "operating_income": 49565859.84,
+      "pretax_income": 33815859.84,
+      "revenue": 196689920.0,
+      "short_term_debt": 105000000.0,
+      "short_term_investments": 0.0,
+      "total_assets": 1511337557.38,
+      "total_equity": 366926395.78
+    },
+    {
+      "acquisitions": 9834496.0,
+      "capex": 11801395.2,
+      "cash_and_equivalents": 25000000.0,
+      "cost_of_revenue": 99918479.36,
+      "current_assets": 232704555.52,
+      "current_liabilities": 94411161.6,
+      "depreciation_amortization": 7867596.8,
+      "duration_days": 91,
+      "end": "2024-12-31",
+      "filed": "2025-02-09",
+      "form": "10-Q",
+      "fp": "Q4",
+      "fy": 2024,
+      "gross_profit": 96771440.64,
+      "income_tax_expense": 7101330.57,
+      "interest_expense": 15750000.0,
+      "long_term_debt": 945000000.0,
+      "net_income": 26714529.27,
+      "operating_cash_flow": 34582126.07,
+      "operating_income": 49565859.84,
+      "pretax_income": 33815859.84,
+      "revenue": 196689920.0,
+      "short_term_debt": 105000000.0,
+      "short_term_investments": 0.0,
+      "total_assets": 1511337557.38,
+      "total_equity": 366926395.78
+    },
+    {
+      "acquisitions": 11014635.52,
+      "capex": 13217562.62,
+      "cash_and_equivalents": 25000000.0,
+      "cost_of_revenue": 110146355.2,
+      "current_assets": 257629102.18,
+      "current_liabilities": 105740500.99,
+      "depreciation_amortization": 8811708.41,
+      "duration_days": 91,
+      "end": "2025-03-31",
+      "filed": "2025-05-10",
+      "form": "10-Q",
+      "fp": "Q1",
+      "fy": 2025,
+      "gross_profit": 110146355.2,
+      "income_tax_expense": 8720481.99,
+      "interest_expense": 15750000.0,
+      "long_term_debt": 945000000.0,
+      "net_income": 32805622.71,
+      "operating_cash_flow": 41617331.13,
+      "operating_income": 57276104.7,
+      "pretax_income": 41526104.7,
+      "revenue": 220292710.4,
+      "short_term_debt": 105000000.0,
+      "short_term_investments": 0.0,
+      "total_assets": 1618839202.15,
+      "total_equity": 463098701.16
+    },
+    {
+      "acquisitions": 11014635.52,
+      "capex": 13217562.62,
+      "cash_and_equivalents": 25000000.0,
+      "cost_of_revenue": 110146355.2,
+      "current_assets": 257629102.18,
+      "current_liabilities": 105740500.99,
+      "depreciation_amortization": 8811708.41,
+      "duration_days": 91,
+      "end": "2025-06-30",
+      "filed": "2025-08-09",
+      "form": "10-Q",
+      "fp": "Q2",
+      "fy": 2025,
+      "gross_profit": 110146355.2,
+      "income_tax_expense": 8720481.99,
+      "interest_expense": 15750000.0,
+      "long_term_debt": 945000000.0,
+      "net_income": 32805622.71,
+      "operating_cash_flow": 41617331.13,
+      "operating_income": 57276104.7,
+      "pretax_income": 41526104.7,
+      "revenue": 220292710.4,
+      "short_term_debt": 105000000.0,
+      "short_term_investments": 0.0,
+      "total_assets": 1618839202.15,
+      "total_equity": 463098701.16
+    },
+    {
+      "acquisitions": 11014635.52,
+      "capex": 13217562.62,
+      "cash_and_equivalents": 25000000.0,
+      "cost_of_revenue": 110146355.2,
+      "current_assets": 257629102.18,
+      "current_liabilities": 105740500.99,
+      "depreciation_amortization": 8811708.41,
+      "duration_days": 91,
+      "end": "2025-09-30",
+      "filed": "2025-11-09",
+      "form": "10-Q",
+      "fp": "Q3",
+      "fy": 2025,
+      "gross_profit": 110146355.2,
+      "income_tax_expense": 8720481.99,
+      "interest_expense": 15750000.0,
+      "long_term_debt": 945000000.0,
+      "net_income": 32805622.71,
+      "operating_cash_flow": 41617331.13,
+      "operating_income": 57276104.7,
+      "pretax_income": 41526104.7,
+      "revenue": 220292710.4,
+      "short_term_debt": 105000000.0,
+      "short_term_investments": 0.0,
+      "total_assets": 1618839202.15,
+      "total_equity": 463098701.16
+    },
+    {
+      "acquisitions": 11014635.52,
+      "capex": 13217562.62,
+      "cash_and_equivalents": 25000000.0,
+      "cost_of_revenue": 110146355.2,
+      "current_assets": 257629102.18,
+      "current_liabilities": 105740500.99,
+      "depreciation_amortization": 8811708.41,
+      "duration_days": 91,
+      "end": "2025-12-31",
+      "filed": "2026-02-09",
+      "form": "10-Q",
+      "fp": "Q4",
+      "fy": 2025,
+      "gross_profit": 110146355.2,
+      "income_tax_expense": 8720481.99,
+      "interest_expense": 15750000.0,
+      "long_term_debt": 945000000.0,
+      "net_income": 32805622.71,
+      "operating_cash_flow": 41617331.13,
+      "operating_income": 57276104.7,
+      "pretax_income": 41526104.7,
+      "revenue": 220292710.4,
+      "short_term_debt": 105000000.0,
+      "short_term_investments": 0.0,
+      "total_assets": 1618839202.15,
+      "total_equity": 463098701.16
+    }
+  ],
+  "source": "fixture",
+  "ticker": "LEVERED"
+}
