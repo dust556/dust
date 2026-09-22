@@ -94,6 +94,25 @@ executed inside a terminal (`tests/integration_test_plan.md`).
 | 11.2 restart safety of exits | `src/StateStore.mqh` | `G3SaveTradeStates()`, `G3LoadTradeStates()`, `G3TradeStateFromLine()` | I-021 test_restart_restores_position_state |
 | 13.3 Final Holdout untouched | whole repository | `tools/mql5_static_check.py` forbidden-construct scan | T-STATIC (static check, 0 issues) |
 
+## Master Specification v0.4.1a Addendum (Patch-2)
+
+| Addendum | file | function(s) | test case |
+|---|---|---|---|
+| A - STATE_UNCERTAIN keeps protective management, returns before new signals | `src/G3_ResearchEA.mq5` | `OnTick()`, `ManagePositions()` (`protective_only`), `RefreshAccountState()` | Q-005, Q-006, Q-007, I-030, I-031 |
+| B - audited manual recovery, no automatic recovery | `src/StateStore.mqh` | `G3RecoveryPrecheck()`, `G3ManualRecover()`, `G3RecoveryEvidence()` | Q-009a..Q-009g, I-032 |
+| B - new state epoch, unknown hard stop never cleared | `src/StateStore.mqh` | `G3BuildEpochState()`, `G3NewEpochHardStop()` | Q-010a, Q-010b, Q-011a, Q-011b, Q-012a, Q-012b, Q-013 |
+| C - OAT on Research IS only, family venue | `tools/g3research/oat_pipeline.py` | `assert_oat_dataset()`, `oat_venue()`, `OatPipeline.run_oat()` | P-300 group |
+| C - freeze, diagnostic WF, Static OOS one-shot | `tools/g3research/oat_pipeline.py` | `freeze_baseline()`, `run_walk_forward()`, `open_static_oos()`, `adopt_walk_forward_parameter()` | P-300 group |
+| C - wf_iteration_manifest, TECHNICAL_RERUN (N-1, LOW-4) | `tools/g3research/oat_pipeline.py` | `WfIterationManifest` | P-400 group |
+| D - deterministic stress replay, closed scenario table | `tools/g3research/stress_replay.py` | `scenario()`, `stressed_prices()`, `spread_blocks_entry()`, `restage_trade()` | P-500 group |
+| D - Base parity gate (99% / 98% / 0.05R / 2%) | `tools/g3research/stress_replay.py` | `base_parity_gate()`, `net_r_relative_diff_pct()` | P-500 group |
+| E - fakeout_3 / fakeout_6 tri-state | `src/ExitManager.mqh`, `src/G3_ResearchEA.mq5` | `G3FakeoutTouched()`, `G3FakeoutObserve()`, `G3FakeoutFinalise()`, `UpdateFakeoutWatches()` | Q-001..Q-008, T-047c |
+| F - shadow research record before the portfolio guard | `src/G3_ResearchEA.mq5` | `EvaluateDecisionTick()` SHADOW row | I-033 |
+| F - offline chronological portfolio replay | `tools/g3research/portfolio_replay.py` | `sort_candidates()`, `PortfolioReplay.run()` | P-600, P-700, P-800 groups |
+| F - cross-check period selection and gate, N-3 disclosure | `tools/g3research/portfolio_replay.py` | `select_crosscheck_periods()`, `crosscheck_gate()`, `representativeness_note()` | P-900 group |
+| G - canonical evaluation window for 60-71 months | `tools/g3research/data_intake.py` | `canonical_window()`, `walk_forward_folds()`, `build_manifest()` | P-100, P-200 groups |
+| constant parity between the EA and the offline instruments | `tools/g3research/spec_constants.py` | `verify_against_sources()` | P-000 group |
+
 ## Cross-instance coordination (implementation detail, not a spec change)
 
 Master Specification v0.4 defines the decision_tick as the first tick of a new

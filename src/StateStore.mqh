@@ -28,13 +28,14 @@
 #include "RiskManager.mqh"
 #include "ExitManager.mqh"
 
-#define G3_STATE_SCHEMA_VERSION 2
+#define G3_STATE_SCHEMA_VERSION 3
 #define G3_CHECKSUM_MOD         1000000007
 
 //--- account level record, key = account_login + MagicNumber
 struct G3State
   {
    int               schema_version;
+   long              epoch_id;           // Addendum B: state epoch, 0 = original
    double            peak_equity;
    ENUM_G3_DD_STATE  dd_state;
    bool              hard_stop_latched;
@@ -80,6 +81,7 @@ double G3StateChecksum(const string record)
 void G3StateInit(G3State &s)
   {
    s.schema_version=G3_STATE_SCHEMA_VERSION;
+   s.epoch_id=0;
    s.peak_equity=0.0;
    s.dd_state=G3_DD_NORMAL;
    s.hard_stop_latched=false;
@@ -101,6 +103,7 @@ string G3StateToRecord(const G3State &s)
   {
    string r="";
    r=r+"v="+IntegerToString(s.schema_version);
+   r=r+"|epoch="+IntegerToString(s.epoch_id);
    r=r+"|peak="+DoubleToString(s.peak_equity,2);
    r=r+"|dd="+IntegerToString((int)s.dd_state);
    r=r+"|latch="+IntegerToString(s.hard_stop_latched?1:0);
@@ -160,6 +163,9 @@ bool G3ParseStateLine(const string line,G3State &out)
    out.schema_version=(int)StringToInteger(v);
    if(out.schema_version!=G3_STATE_SCHEMA_VERSION)
       return(false);
+   out.epoch_id=(long)StringToInteger(G3ExtractField(body,"epoch"));
+   if(out.epoch_id<0)
+      return(false);
    out.peak_equity=StringToDouble(G3ExtractField(body,"peak"));
    int dd=(int)StringToInteger(G3ExtractField(body,"dd"));
    if(dd<0 || dd>4)
@@ -214,6 +220,7 @@ G3State G3MergeConservative(const G3State &a,const G3State &b)
    o.daily_start_equity=(a.daily_start_equity>=b.daily_start_equity)
                         ?a.daily_start_equity:b.daily_start_equity;
    o.server_date=(a.server_date>=b.server_date)?a.server_date:b.server_date;
+   o.epoch_id=(a.epoch_id>=b.epoch_id)?a.epoch_id:b.epoch_id;
    o.checksum=G3StateChecksum(G3StateToRecord(o));
    return(o);
   }
@@ -297,6 +304,64 @@ ENUM_G3_STORE_STATUS G3ReconcileSignalStores(const bool file_ok,const G3SignalSt
    return(anything_stored?G3_STORE_BOTH_LOST:G3_STORE_FRESH);
   }
 
+//+------------------------------------------------------------------+
+//| PURE - Addendum B (DEV-017) manual recovery rules                |
+//+------------------------------------------------------------------+
+
+//--- A new epoch never clears a hard stop that cannot be proven clear.
+//--- "HardStop状態自体が不明な場合は解除せず、G1/G2 review対象とする"
+bool G3NewEpochHardStop(const bool latch_state_known,const bool latch_value)
+  {
+   if(!latch_state_known)
+      return(true);
+   return(latch_value);
+  }
+
+//--- Preconditions for an operator driven recovery. Every refusal is a
+//--- distinct, auditable reason; nothing is ever recovered automatically.
+ENUM_G3_RECOVERY_RESULT G3RecoveryPrecheck(const ENUM_G3_RECOVERY_MODE mode,
+                                           const bool state_is_uncertain,
+                                           const bool operator_present,
+                                           const bool g1_review_record_present,
+                                           const int open_position_count)
+  {
+   if(mode==G3_RECOVERY_NONE)
+      return(G3_RECOVERY_NOT_REQUESTED);
+   if(!state_is_uncertain)
+      return(G3_RECOVERY_REFUSED_NOT_UNCERTAIN);
+   if(!operator_present)
+      return(G3_RECOVERY_REFUSED_NO_OPERATOR);
+   if(mode==G3_RECOVERY_RECONCILE)
+      return(G3_RECOVERY_RECONCILED_AUDITED);   // audit only, state unchanged
+   //--- G3_RECOVERY_NEW_EPOCH
+   if(!g1_review_record_present)
+      return(G3_RECOVERY_REFUSED_NO_G1_RECORD);
+   if(open_position_count>0)
+      return(G3_RECOVERY_REFUSED_OPEN_POSITIONS);
+   return(G3_RECOVERY_EPOCH_CREATED);
+  }
+
+//--- The state a new epoch starts from: PeakEquity and DailyStartEquity
+//--- are re-based on the current equity, and past performance is kept
+//--- separate through the incremented epoch_id.
+G3State G3BuildEpochState(const G3State &prior,const double current_equity,
+                          const long server_date,const bool latch_state_known,
+                          const bool latch_value)
+  {
+   G3State o;
+   G3StateInit(o);
+   o.epoch_id=prior.epoch_id+1;
+   o.peak_equity=current_equity;
+   o.daily_start_equity=current_equity;
+   o.server_date=server_date;
+   o.dd_state=G3_DD_NORMAL;
+   o.hard_stop_latched=G3NewEpochHardStop(latch_state_known,latch_value);
+   if(o.hard_stop_latched)
+      o.dd_state=G3_DD_HARD_STOP;
+   o.checksum=G3StateChecksum(G3StateToRecord(o));
+   return(o);
+  }
+
 //--- Exactly-once guard: a signal whose M5 bar time is not newer than
 //--- the last consumed one is refused (fail closed).
 bool G3SignalAlreadyConsumed(const G3SignalState &s,const string signal_id,
@@ -329,6 +394,8 @@ struct G3StoreContext
    //--- per symbol runtime position tracking
    string            trade_file;
    string            trade_tmp;
+   string            fakeout_file;
+   string            fakeout_tmp;
    string            audit_file;
    string            lock_name;
   };
@@ -349,6 +416,8 @@ void G3StoreContextInit(G3StoreContext &ctx,const string symbol,const long magic
    ctx.signal_gv  ="G3S_"+mag+"_"+symbol+"_";
    ctx.trade_file =G3_STORE_FOLDER+"\\trades_"+tag+"_"+symbol+".csv";
    ctx.trade_tmp  =G3_STORE_FOLDER+"\\trades_"+tag+"_"+symbol+".tmp";
+   ctx.fakeout_file=G3_STORE_FOLDER+"\\fakeout_"+tag+"_"+symbol+".csv";
+   ctx.fakeout_tmp =G3_STORE_FOLDER+"\\fakeout_"+tag+"_"+symbol+".tmp";
    ctx.audit_file =G3_STORE_FOLDER+"\\audit_"+tag+".log";
    ctx.lock_name  ="G3LOCK_"+mag;
   }
@@ -392,6 +461,7 @@ bool G3WriteStateGV(const G3StoreContext &ctx,const G3State &s)
    string body=G3StateToRecord(s);
    bool ok=true;
    ok=ok && GlobalVariableSet(ctx.state_gv+"V",(double)s.schema_version)>0;
+   ok=ok && GlobalVariableSet(ctx.state_gv+"EPOCH",(double)s.epoch_id)>0;
    ok=ok && GlobalVariableSet(ctx.state_gv+"PEAK",s.peak_equity)>0;
    ok=ok && GlobalVariableSet(ctx.state_gv+"DD",(double)s.dd_state)>0;
    ok=ok && GlobalVariableSet(ctx.state_gv+"LATCH",s.hard_stop_latched?1.0:0.0)>0;
@@ -411,6 +481,9 @@ bool G3ReadStateGV(const G3StoreContext &ctx,G3State &s,bool &existed)
       return(false);
    s.schema_version=(int)GlobalVariableGet(ctx.state_gv+"V");
    if(s.schema_version!=G3_STATE_SCHEMA_VERSION)
+      return(false);
+   s.epoch_id=(long)GlobalVariableGet(ctx.state_gv+"EPOCH");
+   if(s.epoch_id<0)
       return(false);
    s.peak_equity=GlobalVariableGet(ctx.state_gv+"PEAK");
    int dd=(int)GlobalVariableGet(ctx.state_gv+"DD");
@@ -587,6 +660,89 @@ bool G3ManualHardStopReset(const G3StoreContext &ctx,G3State &s,const double dd_
   }
 
 //+------------------------------------------------------------------+
+//| Addendum B (DEV-017) - audited manual recovery                   |
+//|                                                                  |
+//| Nothing here ever runs by itself. The operator asks for it, the   |
+//| operator is named, and every outcome - including every refusal -  |
+//| is written to the audit log.                                      |
+//+------------------------------------------------------------------+
+string G3RecoveryEvidence(const G3StoreContext &ctx,const G3State &current,
+                          const double equity,const int open_positions)
+  {
+   G3State fs,gs;
+   G3StateInit(fs);
+   G3StateInit(gs);
+   string line="";
+   bool f_existed=false,g_existed=false;
+   bool f_ok=(G3ReadLineFile(ctx.state_file,line,f_existed) && G3ParseStateLine(line,fs));
+   bool g_ok=G3ReadStateGV(ctx,gs,g_existed);
+   string e="";
+   e=e+"file_exists="+(f_existed?"1":"0")+" file_valid="+(f_ok?"1":"0");
+   e=e+" gv_exists="+(g_existed?"1":"0")+" gv_valid="+(g_ok?"1":"0");
+   e=e+" file_peak="+(f_ok?DoubleToString(fs.peak_equity,2):"NA");
+   e=e+" gv_peak="+(g_ok?DoubleToString(gs.peak_equity,2):"NA");
+   e=e+" file_latch="+(f_ok?(fs.hard_stop_latched?"1":"0"):"NA");
+   e=e+" gv_latch="+(g_ok?(gs.hard_stop_latched?"1":"0"):"NA");
+   e=e+" deals_available="+(HistorySelect(0,TimeCurrent())?IntegerToString(HistoryDealsTotal()):"NA");
+   e=e+" open_positions="+IntegerToString(open_positions);
+   e=e+" current_equity="+DoubleToString(equity,2);
+   e=e+" current_epoch="+IntegerToString(current.epoch_id);
+   e=e+" prior_state_hash="+DoubleToString(G3StateChecksum(G3StateToRecord(current)),0);
+   return(e);
+  }
+
+//--- Returns the outcome and, for G3_RECOVERY_EPOCH_CREATED only,
+//--- replaces `state` with the new epoch and flushes both stores.
+ENUM_G3_RECOVERY_RESULT G3ManualRecover(const G3StoreContext &ctx,G3State &state,
+                                        const ENUM_G3_RECOVERY_MODE mode,
+                                        const string operator_id,
+                                        const string g1_review_record,
+                                        const double current_equity,
+                                        const long server_date,
+                                        const int open_position_count,
+                                        const bool latch_state_known,
+                                        const bool latch_value)
+  {
+   bool uncertain=(state.dd_state==G3_DD_UNCERTAIN);
+   ENUM_G3_RECOVERY_RESULT r=G3RecoveryPrecheck(mode,uncertain,
+                                                StringLen(operator_id)>0,
+                                                StringLen(g1_review_record)>0,
+                                                open_position_count);
+   if(r==G3_RECOVERY_NOT_REQUESTED)
+      return(r);
+
+   string evidence=G3RecoveryEvidence(ctx,state,current_equity,open_position_count);
+   string head="operator="+operator_id+" mode="+IntegerToString((int)mode)
+               +" g1_review_record="+((StringLen(g1_review_record)>0)?g1_review_record:"NONE")
+               +" ";
+
+   if(r!=G3_RECOVERY_EPOCH_CREATED)
+     {
+      //--- reconciliation and every refusal are audit-only: state is
+      //--- never modified here.
+      G3AuditLog(ctx,"RECOVERY_"+G3RecoveryResultToString(r),head+evidence);
+      return(r);
+     }
+
+   G3State epoch=G3BuildEpochState(state,current_equity,server_date,
+                                   latch_state_known,latch_value);
+   if(!G3PersistState(ctx,epoch))
+     {
+      G3AuditLog(ctx,"RECOVERY_REFUSED_PERSIST_FAILED",head+evidence);
+      return(G3_RECOVERY_REFUSED_PERSIST_FAILED);
+     }
+   state=epoch;
+   G3AuditLog(ctx,"RECOVERY_EPOCH_CREATED",
+              head+"new_epoch_id="+IntegerToString(epoch.epoch_id)
+              +" new_peak_equity="+DoubleToString(epoch.peak_equity,2)
+              +" new_daily_start_equity="+DoubleToString(epoch.daily_start_equity,2)
+              +" hard_stop_latched="+(epoch.hard_stop_latched?"1":"0")
+              +" latch_state_known="+(latch_state_known?"1":"0")
+              +" "+evidence);
+   return(G3_RECOVERY_EPOCH_CREATED);
+  }
+
+//+------------------------------------------------------------------+
 //| Position state persistence (restart safety for exits)            |
 //+------------------------------------------------------------------+
 string G3TradeStateToLine(const G3TradeState &t)
@@ -698,6 +854,98 @@ int G3LoadTradeStates(const G3StoreContext &ctx,G3TradeState &states[],const int
       if(G3TradeStateFromLine(line,t))
         {
          states[count]=t;
+         count++;
+        }
+     }
+   FileClose(h);
+   return(count);
+  }
+
+//+------------------------------------------------------------------+
+//| Fakeout observation windows (Addendum E)                         |
+//| Persisted so that a restart can be reported as NA instead of      |
+//| silently producing FALSE.                                         |
+//+------------------------------------------------------------------+
+string G3FakeoutToLine(const G3FakeoutWatch &w)
+  {
+   string r="";
+   r=r+IntegerToString((long)w.ticket)+";";
+   r=r+w.symbol+";";
+   r=r+w.signal_id+";";
+   r=r+IntegerToString((int)w.side)+";";
+   r=r+DoubleToString(w.entry_price,8)+";";
+   r=r+DoubleToString(w.initial_sl,8)+";";
+   r=r+IntegerToString(w.entry_m5_bar)+";";
+   r=r+IntegerToString(w.bars_observed)+";";
+   r=r+IntegerToString(w.observation_gap?1:0)+";";
+   r=r+IntegerToString((int)w.fakeout_3)+";";
+   r=r+IntegerToString((int)w.fakeout_6)+";";
+   r=r+IntegerToString(w.completed?1:0);
+   return(r);
+  }
+
+bool G3FakeoutFromLine(const string line,G3FakeoutWatch &w)
+  {
+   string f[];
+   int n=StringSplit(line,(ushort)';',f);
+   if(n<12)
+      return(false);
+   w.active         =true;
+   w.ticket         =(ulong)StringToInteger(f[0]);
+   w.symbol         =f[1];
+   w.signal_id      =f[2];
+   w.side           =(ENUM_G3_SIDE)StringToInteger(f[3]);
+   w.entry_price    =StringToDouble(f[4]);
+   w.initial_sl     =StringToDouble(f[5]);
+   w.entry_m5_bar   =(long)StringToInteger(f[6]);
+   w.bars_observed  =(int)StringToInteger(f[7]);
+   w.observation_gap=(StringToInteger(f[8])!=0);
+   w.fakeout_3      =(ENUM_G3_TRISTATE)StringToInteger(f[9]);
+   w.fakeout_6      =(ENUM_G3_TRISTATE)StringToInteger(f[10]);
+   w.completed      =(StringToInteger(f[11])!=0);
+   return(w.initial_sl>0.0 && w.entry_m5_bar>0);
+  }
+
+bool G3SaveFakeoutWatches(const G3StoreContext &ctx,const G3FakeoutWatch &watches[],
+                          const int count)
+  {
+   int h=FileOpen(ctx.fakeout_tmp,FILE_WRITE|FILE_TXT|FILE_ANSI|FILE_COMMON);
+   if(h==INVALID_HANDLE)
+      return(false);
+   for(int i=0;i<count;i++)
+     {
+      if(!watches[i].active || watches[i].completed)
+         continue;
+      FileWriteString(h,G3FakeoutToLine(watches[i])+"\r\n");
+     }
+   FileFlush(h);
+   FileClose(h);
+   if(FileIsExist(ctx.fakeout_file,FILE_COMMON))
+      FileDelete(ctx.fakeout_file,FILE_COMMON);
+   return(FileMove(ctx.fakeout_tmp,FILE_COMMON,ctx.fakeout_file,FILE_REWRITE|FILE_COMMON));
+  }
+
+//--- Every window restored from disk is marked as incompletely observed:
+//--- the EA cannot prove what the price did while it was down.
+int G3LoadFakeoutWatches(const G3StoreContext &ctx,G3FakeoutWatch &watches[],
+                         const int capacity)
+  {
+   int count=0;
+   if(!FileIsExist(ctx.fakeout_file,FILE_COMMON))
+      return(0);
+   int h=FileOpen(ctx.fakeout_file,FILE_READ|FILE_TXT|FILE_ANSI|FILE_COMMON);
+   if(h==INVALID_HANDLE)
+      return(0);
+   while(!FileIsEnding(h) && count<capacity)
+     {
+      string line=FileReadString(h);
+      if(StringLen(line)<10)
+         continue;
+      G3FakeoutWatch w;
+      if(G3FakeoutFromLine(line,w))
+        {
+         G3FakeoutMarkObservationGap(w);
+         watches[count]=w;
          count++;
         }
      }

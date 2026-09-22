@@ -30,14 +30,20 @@ AUTHORITY = {
         "7d17353844c88030622638abd10c5b475c7f74eea26936b21c87e8c15d64fbeb",
     "g3_research_start_record":
         "d068cdc797a6708629c21df2a085afa6a8a3d46b388f200340e856e1376ab82c",
+    # Patch-2 authority: the G1 addendum and the G2 delta re-audit that
+    # cleared it (BLOCKER 0 / HIGH 0 / PASS).
+    "master_spec_v0.4.1a_addendum":
+        "fa107ac25d161253511a69b620ef70dd66677406abb539ad8031de2b680aa40c",
+    "g2_delta_re_audit_v0.4.1a":
+        "5567a3297a79430d40d5b8d9009044b8b32c059e78bff48c5b2ef74c5e7f7f85",
 }
 
 GROUPS = {
     "source": ("src", (".mq5", ".mqh")),
     "config": ("config", (".set",)),
     "schema": ("schema", (".md",)),
-    "tests": ("tests", (".cpp", ".h", ".md")),
-    "tools": ("tools", (".py",)),
+    "tests": ("tests", (".cpp", ".h", ".md", ".py", ".sh")),
+    "tools": ("tools", (".py", ".sh")),
 }
 
 
@@ -80,6 +86,7 @@ def main():
         "aggregate": {},
         "ea_hash": "PENDING_METAEDITOR_COMPILE",
         "spec_hash": AUTHORITY["master_specification_v0.4"],
+        "addendum_hash": AUTHORITY["master_spec_v0.4.1a_addendum"],
         "authority_documents": AUTHORITY,
         "notes": [
             "ea_hash is the SHA-256 of the compiled .ex5 and can only be produced "
@@ -119,6 +126,7 @@ def main():
         fh.write("# master_specification_v0.4 and g2_re_audit_report_v0.4 match the\n")
         fh.write("# hash table printed inside the G3 research start record.\n")
         fh.write("SPEC_HASH=%s\n" % AUTHORITY["master_specification_v0.4"])
+        fh.write("ADDENDUM_HASH=%s\n" % AUTHORITY["master_spec_v0.4.1a_addendum"])
         for k, v in AUTHORITY.items():
             fh.write("%s=%s\n" % (k.upper(), v))
 

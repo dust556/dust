@@ -2,20 +2,20 @@
   "artifact": "G3 Research EA",
   "spec_authority": "Master Specification v0.4",
   "ea_version": "0.4.0-research",
-  "generated_utc": "2026-09-22T10:39:02Z",
+  "generated_utc": "2026-09-22T15:00:08Z",
   "groups": {
     "source": {
-      "src/ExitManager.mqh": "ab93de7397d646dc424daa980e5c3c1526cd21973bb86c47e1fbe06592ac1644",
-      "src/G3Types.mqh": "c2f1212fa3c58975974e9231317009d07467fd866fe8852948c7aa78e490786d",
-      "src/G3_ResearchEA.mq5": "21ed575147d129a9ad903e6cb48ca807040c414fc2cb013eeff5052e1e337081",
+      "src/ExitManager.mqh": "93466d9b5e2435d3d396d37ea70ff75db56f705891f3ecc5c6a36a4f7d2808f8",
+      "src/G3Types.mqh": "c07d2e541c30a2428a76cc3486c1fa8c3b1cd20f44c12d5b641733f5af173c0c",
+      "src/G3_ResearchEA.mq5": "163f06e694f76dc856bb035c9025cbebb87c74d7dc8c988e7e9447b9e9f9ab53",
       "src/MarketFilters.mqh": "39f6aedcafbd24eae98c3fe4ad0a142640ec997a95e5aeee6f1545f77ffd248a",
       "src/OrderManager.mqh": "36fb697d158827da9c54fe98c4aacef36b3021f096f2794fdf92b629c5e0e518",
       "src/PortfolioManager.mqh": "361721a246c7e58545255c715bfda8234756637debf8b93f90a8939c6ab4e198",
-      "src/ResearchLogger.mqh": "577ca48d3cd4c2acc67b6189da861a810f5a60a95b200988a83304b224cf5b1c",
+      "src/ResearchLogger.mqh": "514625741b67718efc5baa88c8beaccf97dd374aea6a11442ac72a802df2d027",
       "src/RiskManager.mqh": "98a58f2bd9d2a3baf615ac9d6b9a64e625288dace268e7092f40e35e52383592",
       "src/SetupM15.mqh": "253b6e7852b064329dc146f35dd56ba49c666276d316d58041a50661bbafea36",
       "src/SignalH4.mqh": "96b30def5e5fa4df42e05015d8ea39abe7ac359720823253f3c50df12d43655c",
-      "src/StateStore.mqh": "126dacc9230c07514b5004d25f3f6801c7e82ccedb05f870200995f50910907a",
+      "src/StateStore.mqh": "54c4cd79644720641841dd2310bd28dbcabc5ba142f63f470732e0db8efd92f7",
       "src/TimeSync.mqh": "c31d3036d472ac10dbaf8b0cf83a3ee40a4e7200257efd6d63ce7c4baf550b97",
       "src/TriggerM5.mqh": "038464f2dc2785fb12005f4f8c2357b7ca02ca06153938fbefc774a6fa3a1656"
     },
@@ -26,38 +26,51 @@
       "config/score_6.set": "3128fced4f1fdeba774ba3573ef30b4b4a01a780cf450c07d093c4fa2ecd0432"
     },
     "schema": {
-      "schema/reason_codes.md": "5e37728feb12619f13483065c3dba9be4a2681eb81921c4b1842a21fa69e42fc",
-      "schema/research_log_schema.md": "606fccf623577fa18bd8834d249922440fc63fa730316c14711056cb71f6c6a0"
+      "schema/reason_codes.md": "1ff60b3303a74bacea81140d57ab982ba2535cbb1231663a8d123f9843adb1b5",
+      "schema/research_log_schema.md": "1b3980cb51208885755ae474e80d9d8fce4145a73fc35c55a9530f1deebf1777"
     },
     "tests": {
       "tests/host/mql5_shim.h": "a8329fc0f159007b65919df8a0b7466cffd9bec513b4447694bc42feee67967f",
-      "tests/host/test_main.cpp": "c7d5cfb4f6fc11fa184ae52f95bd911c9860a643c2e465530ed18c9a5da8fa4d",
-      "tests/integration_test_plan.md": "c6d247435aadaa2fb57f19f65d2674fa9c923c2a96fc331f27897ea1c1e7e4b0",
+      "tests/host/test_main.cpp": "1bb849f74bf08c3b2512d5e9b948d95b6310dbbc06825bf7e7d5a09c3ba882fd",
+      "tests/integration_test_plan.md": "857296b111ba22bcc82973088a16646173229d32bf168fd820a9dcfe152aad04",
       "tests/known_scenarios.md": "d44ac8429c0273a0edc46054fe0c728d029b34f3bb730e1cdb931964f3ac792a",
-      "tests/unit_test_plan.md": "07ed38a996f6463646b673d3edd7aad8dfd5e4121f7ad55b5831c101eee824c9"
+      "tests/python/test_g3_research_tools.py": "7a6d5d93806f27368faa3f0df5340b2a503936d3b2001fddef3b321d35158f39",
+      "tests/run_all_tests.sh": "9f009e1a721d277e421913242ef3ff69714a3f21fa232bed25cc9b07f85c27b2",
+      "tests/run_python_tests.sh": "1fc81131d5fdf93ea0d320bfce0b844c73df8ddff890e2b665707b40b4376539",
+      "tests/run_unit_tests.sh": "60e316a42ccdaa0cd558dd63f062c6ab4763c301034e672a6a05f7949ed22a44",
+      "tests/unit_test_plan.md": "ee4c3ed8c2ad1a127624e7c1b4eaacb0004a27f2a73be0aa51cab028002eb17d"
     },
     "tools": {
-      "tools/compute_hashes.py": "ba924b190439f43c4455e7fef4465fd31b82147dde5dbc2813311f3748e4f1ed",
-      "tools/gen_log_schema.py": "6f291ac20fd3f0eb18fa6d524bca4754f383a06ad3854a4f8f11a6a52ba73496",
-      "tools/gen_reason_codes.py": "995dfec7cde816e922687b66bc7d7b4323d3a476dc960e56a8331be68d2ad4fa",
-      "tools/gen_unit_test_plan.py": "b2ed3fd1875e084b64d00d5ecb38b8d4ae6c18d9c2a77a10fe8aee8d807a71a7",
+      "tools/compute_hashes.py": "8a07e1c76736d04872500d571f5589ca9c920cc622a2ddc15be4b727b2654c29",
+      "tools/g3research/__init__.py": "ac3154ca2466d655744c15261d99eca896cdfd87ab69d7dbcd4c2851a0bbc35f",
+      "tools/g3research/data_intake.py": "e338f8d5e5fa02d368ee32ea45b31de0e780312696ddd6413718a8f6fb20a790",
+      "tools/g3research/oat_pipeline.py": "689290ac7c184943168e140bd1318b1eebf7ad37ddadd1fea5c3792d1280ee2b",
+      "tools/g3research/portfolio_replay.py": "c354878886f736e9583289b0bc405570b30a7b9aaed2c3abc1f65944ee4955f3",
+      "tools/g3research/spec_constants.py": "51e61529c683220946e7caef278a8d60d5f4ec51010e8a4120389cbe97d59a76",
+      "tools/g3research/stress_replay.py": "6d2398c67239232266c6ba2303cee4e0f4da8ab1140a83956a3e15615e797e8c",
+      "tools/gen_log_schema.py": "3910eb689ba1f91763c46059590f7f7659846daa6da65eb59e4a92c183001e89",
+      "tools/gen_reason_codes.py": "8da7bd34821d77711701f13ec41b7c93bbc8d64562864db5f6a6854eb3bfd656",
+      "tools/gen_unit_test_plan.py": "1906685a8ee22b89788f5f1e0edb053d465364e943914c258cf228052f7e783f",
       "tools/mql5_static_check.py": "2f2acc214e26ed758cf1b5f66e4b9c397264e1d1ac48c65cef8073b43e33e328"
     }
   },
   "aggregate": {
-    "source_hash": "50e42c6af071ea65b407680aad45acf86a682784684325ed9a6ddfa2c3462cb1",
+    "source_hash": "6faa0ea1cffceb67ded95736de2315401aacf3d7ec6158ed7fc151e7028d6ee6",
     "config_hash": "37c820c795a23d9c30a11b19d8bd811f0bbd0c255819b86695a1c8dd1d2ebe5e",
-    "schema_hash": "01c3b3ff4cab5d507cdf8791c789f3803e8ad3dfb2d599e13cf068f8cdefe5e4",
-    "tests_hash": "b344188e637330af46e10d50c9ca1d0237bc060ec78a0709535145bfd56c499c",
-    "tools_hash": "4d871b4d2dc383ec1b04326de29277f33a8bd16207ac5e0b746a6b77e7d0e2fa",
-    "release_hash": "72158a82e3122ae386d62f36094465943df3303fedf88ee28566f0670b6e51cc"
+    "schema_hash": "ea3f1e17364f26c73d5e1686db76d0eaec61bdfedf7f3151aa26bac3ac20a332",
+    "tests_hash": "34c5c329d8cfd110f8f6ec879e181bacbf4ad29f12235acfe352a9022c6cec18",
+    "tools_hash": "c2640961fbfd7cdd108a21eef2cc2f8a153ad0b5a58ccff7855573021ca74ca0",
+    "release_hash": "61ddcf9eede0e7b0a4403e57bc347544ada7a798c953916eefa6ceea28f33eb0"
   },
   "ea_hash": "PENDING_METAEDITOR_COMPILE",
   "spec_hash": "229f29920ee411cf008442f56a1061583fc564ad50c979c32bf7996ada7ff965",
+  "addendum_hash": "fa107ac25d161253511a69b620ef70dd66677406abb539ad8031de2b680aa40c",
   "authority_documents": {
     "master_specification_v0.4": "229f29920ee411cf008442f56a1061583fc564ad50c979c32bf7996ada7ff965",
     "g2_re_audit_report_v0.4": "7d17353844c88030622638abd10c5b475c7f74eea26936b21c87e8c15d64fbeb",
-    "g3_research_start_record": "d068cdc797a6708629c21df2a085afa6a8a3d46b388f200340e856e1376ab82c"
+    "g3_research_start_record": "d068cdc797a6708629c21df2a085afa6a8a3d46b388f200340e856e1376ab82c",
+    "master_spec_v0.4.1a_addendum": "fa107ac25d161253511a69b620ef70dd66677406abb539ad8031de2b680aa40c",
+    "g2_delta_re_audit_v0.4.1a": "5567a3297a79430d40d5b8d9009044b8b32c059e78bff48c5b2ef74c5e7f7f85"
   },
   "notes": [
     "ea_hash is the SHA-256 of the compiled .ex5 and can only be produced by a MetaEditor build; this repository has no MQL5 toolchain.",

@@ -80,6 +80,35 @@ enum ENUM_G3_SCORE_THRESHOLD
    G3_SCORE_TH_6 = 6
   };
 
+//--- Master Specification v0.4.1a Addendum E: a diagnostic flag that can
+//--- legitimately be undeterminable. NA must never be collapsed to false.
+enum ENUM_G3_TRISTATE
+  {
+   G3_TRI_NA    = 0,
+   G3_TRI_FALSE = 1,
+   G3_TRI_TRUE  = 2
+  };
+
+//--- Addendum B: the outcome of an operator driven recovery attempt.
+enum ENUM_G3_RECOVERY_MODE
+  {
+   G3_RECOVERY_NONE      = 0,   // normal operation, nothing requested
+   G3_RECOVERY_RECONCILE = 1,   // audit-only reconciliation, state unchanged
+   G3_RECOVERY_NEW_EPOCH = 2    // create a new state epoch (flat book only)
+  };
+
+enum ENUM_G3_RECOVERY_RESULT
+  {
+   G3_RECOVERY_NOT_REQUESTED      = 0,
+   G3_RECOVERY_RECONCILED_AUDITED = 1,
+   G3_RECOVERY_EPOCH_CREATED      = 2,
+   G3_RECOVERY_REFUSED_NOT_UNCERTAIN = 3,
+   G3_RECOVERY_REFUSED_NO_OPERATOR   = 4,
+   G3_RECOVERY_REFUSED_NO_G1_RECORD  = 5,
+   G3_RECOVERY_REFUSED_OPEN_POSITIONS= 6,
+   G3_RECOVERY_REFUSED_PERSIST_FAILED= 7
+  };
+
 enum ENUM_G3_STORE_STATUS
   {
    G3_STORE_OK              = 0,  // both stores agree
@@ -112,6 +141,7 @@ enum ENUM_G3_REASON
    G3_R_SIGNAL_ALREADY_CONSUMED,
    //--- risk / state
    G3_R_STATE_UNCERTAIN,
+   G3_R_STATE_EPOCH_RESTART_REQUIRED,
    G3_R_HARD_STOP_LATCHED,
    G3_R_DAILY_ENTRY_LOCK,
    G3_R_SL_DISTANCE_ABOVE_MAX,
@@ -162,6 +192,7 @@ string G3ReasonToString(const ENUM_G3_REASON r)
       case G3_R_INDICATOR_NOT_READY:            return("INDICATOR_NOT_READY");
       case G3_R_SIGNAL_ALREADY_CONSUMED:        return("SIGNAL_ALREADY_CONSUMED");
       case G3_R_STATE_UNCERTAIN:                return("STATE_UNCERTAIN");
+      case G3_R_STATE_EPOCH_RESTART_REQUIRED:   return("STATE_EPOCH_RESTART_REQUIRED");
       case G3_R_HARD_STOP_LATCHED:              return("HARD_STOP_LATCHED");
       case G3_R_DAILY_ENTRY_LOCK:               return("DAILY_ENTRY_LOCK");
       case G3_R_SL_DISTANCE_ABOVE_MAX:          return("SL_DISTANCE_ABOVE_MAX");
@@ -222,6 +253,29 @@ string G3CorrStateToString(const ENUM_G3_CORR_STATE s)
 //--- Master Specification v0.4 section 12 names exactly three values for
 //--- the state_store_status log field. The richer internal status is
 //--- logged separately as state_store_detail.
+string G3TriStateToString(const ENUM_G3_TRISTATE t)
+  {
+   if(t==G3_TRI_TRUE)  return("TRUE");
+   if(t==G3_TRI_FALSE) return("FALSE");
+   return("NA");
+  }
+
+string G3RecoveryResultToString(const ENUM_G3_RECOVERY_RESULT r)
+  {
+   switch(r)
+     {
+      case G3_RECOVERY_NOT_REQUESTED:         return("NOT_REQUESTED");
+      case G3_RECOVERY_RECONCILED_AUDITED:    return("RECONCILED_AUDITED");
+      case G3_RECOVERY_EPOCH_CREATED:         return("EPOCH_CREATED");
+      case G3_RECOVERY_REFUSED_NOT_UNCERTAIN: return("REFUSED_NOT_UNCERTAIN");
+      case G3_RECOVERY_REFUSED_NO_OPERATOR:   return("REFUSED_NO_OPERATOR");
+      case G3_RECOVERY_REFUSED_NO_G1_RECORD:  return("REFUSED_NO_G1_REVIEW_RECORD");
+      case G3_RECOVERY_REFUSED_OPEN_POSITIONS:return("REFUSED_OPEN_POSITIONS");
+      case G3_RECOVERY_REFUSED_PERSIST_FAILED:return("REFUSED_PERSIST_FAILED");
+     }
+   return("UNMAPPED");
+  }
+
 string G3StoreStatusToSpec(const ENUM_G3_STORE_STATUS s)
   {
    switch(s)

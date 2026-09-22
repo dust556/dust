@@ -55,7 +55,13 @@ input double InpStressCommissionPerLot  = 0.0;    // execution stress: commissio
 //--- Research infrastructure (not strategy parameters).
 input long   InpMagic                   = 940400; // magic number
 input string InpRunId                   = "R000"; // research run id (log file tag)
-input bool   InpManualHardStopReset     = false;  // audited manual HARD_STOP reset (section 10)
+input bool   InpManualHardStopReset     = false;  // audited manual HARD_STOP reset (section 11.1)
+
+//--- Manual recovery operations (v0.4.1a Addendum B). Never automatic:
+//--- the operator requests the mode and is named in the audit record.
+input ENUM_G3_RECOVERY_MODE InpManualRecovery = G3_RECOVERY_NONE; // audited manual recovery mode
+input string InpOperatorId              = "";     // operator id (required for any recovery)
+input string InpG1ReviewRecord          = "";     // G1 review record id (required for a new state epoch)
 
 //+------------------------------------------------------------------+
 //| Globals                                                          |
@@ -76,12 +82,25 @@ G3TradeState   g_trades[G3_MAX_TRACKED];
 int            g_trade_count=0;
 bool           g_timeout_close[G3_MAX_TRACKED];
 
+#define G3_MAX_FAKEOUT_WATCH (G3_MAX_TRACKED*2)
+G3FakeoutWatch g_fakeouts[G3_MAX_FAKEOUT_WATCH];
+int            g_fakeout_count=0;
+
+ENUM_G3_RECOVERY_RESULT g_recovery_result=G3_RECOVERY_NOT_REQUESTED;
+bool           g_epoch_restart_required=false;
+
 datetime       g_last_m5_open=0;
 bool           g_init_ok=false;
 
 double         g_equity=0.0;
 double         g_dd_pct=0.0;
 bool           g_daily_lock=false;
+
+//+------------------------------------------------------------------+
+//| Forward declarations                                             |
+//| Used before their definition further down this file.             |
+//+------------------------------------------------------------------+
+void FakeoutVerdict(const string signal_id,ENUM_G3_TRISTATE &f3,ENUM_G3_TRISTATE &f6);
 
 //+------------------------------------------------------------------+
 //| Helpers                                                          |
@@ -252,7 +271,38 @@ int OnInit()
       Print("G3: manual HARD_STOP reset requested, applied=",done," dd=",dd);
      }
 
+   //--- Addendum B: operator driven recovery. Refusals are audited too.
+   if(InpManualRecovery!=G3_RECOVERY_NONE)
+     {
+      int open_positions=0;
+      int total=PositionsTotal();
+      for(int i=0;i<total;i++)
+        {
+         ulong tk=PositionGetTicket(i);
+         if(tk==0 || !PositionSelectByTicket(tk))
+            continue;
+         if(PositionGetInteger(POSITION_MAGIC)==InpMagic)
+            open_positions++;
+        }
+      //--- the latch can only be trusted when at least one store survived
+      bool latch_known=(g_store_status!=G3_STORE_BOTH_LOST);
+      g_recovery_result=G3ManualRecover(g_ctx,g_state,InpManualRecovery,
+                                        InpOperatorId,InpG1ReviewRecord,
+                                        equity,ServerDateOf(TimeCurrent()),
+                                        open_positions,latch_known,
+                                        g_state.hard_stop_latched);
+      Print("G3: manual recovery -> ",G3RecoveryResultToString(g_recovery_result));
+      if(g_recovery_result==G3_RECOVERY_EPOCH_CREATED)
+        {
+         //--- Addendum B: trading resumes only after the next OnInit has
+         //--- confirmed both stores agree on the new epoch.
+         g_epoch_restart_required=true;
+         g_store_status=G3_STORE_OK;
+        }
+     }
+
    g_trade_count=G3LoadTradeStates(g_ctx,g_trades,G3_MAX_TRACKED);
+   g_fakeout_count=G3LoadFakeoutWatches(g_ctx,g_fakeouts,G3_MAX_FAKEOUT_WATCH);
    for(int i=0;i<G3_MAX_TRACKED;i++)
       g_timeout_close[i]=false;
 
@@ -285,7 +335,9 @@ void OnDeinit(const int reason)
    if(g_init_ok)
      {
       G3SaveTradeStates(g_ctx,g_trades,g_trade_count);
-      G3PersistState(g_ctx,g_state);
+      G3SaveFakeoutWatches(g_ctx,g_fakeouts,g_fakeout_count);
+      if(g_state.dd_state!=G3_DD_UNCERTAIN)
+         G3PersistState(g_ctx,g_state);
       G3PersistSignalState(g_ctx,g_sig);
      }
    G3LoggerClose(g_logger);
@@ -316,6 +368,18 @@ void RefreshAccountState(double &equity_out,double &dd_pct_out,bool &daily_lock_
       G3RefreshSharedState(g_ctx,g_state);
 
    bool changed=false;
+
+   //--- Addendum A: under STATE_UNCERTAIN the stored peak cannot be
+   //--- trusted, so nothing is updated and nothing is written. The
+   //--- drawdown is still computed for the log, flagged by dd_state.
+   if(g_state.dd_state==G3_DD_UNCERTAIN)
+     {
+      dd_pct_out=G3DrawdownPct(g_state.peak_equity,equity_out);
+      daily_lock_out=G3DailyEntryLocked(g_state.daily_start_equity,equity_out);
+      if(locked)
+         G3PortfolioUnlock(g_ctx);
+      return;
+     }
 
    //--- Server day rollover (spec 11.3). Only a FORWARD date change
    //--- starts a new day: spec 15.4 requires that a clock regression or
@@ -374,6 +438,8 @@ void FillAccountFields(G3LogRecord &rec,const double equity,const double dd_pct,
    rec.daily_lock=daily_lock;
    rec.hard_stop_latched=g_state.hard_stop_latched;
    rec.store_status=g_store_status;
+   rec.state_epoch=g_state.epoch_id;
+   rec.recovery_result=g_recovery_result;
    rec.exit_mode=(int)InpExitMode;
    rec.timeout_bars=(int)InpTimeout;
    rec.score_threshold_input=(int)InpScoreThreshold;
@@ -774,6 +840,16 @@ void EvaluateDecisionTick(const datetime m5_bar_open)
    rec.final_lot=final_lot;
    rec.lot_capped_by_max=capped;
 
+   //--- Addendum F (ISSUE-003): the strategy-eligible candidate is
+   //--- recorded BEFORE any portfolio guard can drop it, so that the
+   //--- offline chronological portfolio replay can re-decide it against
+   //--- the shared state. This row is research data only.
+   G3LogRecord shadow=rec;
+   shadow.record_type="SHADOW";
+   shadow.skip_reason=G3_R_NONE;
+   shadow.requested_price=entry_price;
+   G3LoggerWrite(g_logger,shadow);
+
    //--- ---------------- portfolio limits (section 11.4) -------------
    bool locked=G3PortfolioLock(g_ctx,G3_LOCK_TIMEOUT_MS);
    if(!locked)
@@ -927,6 +1003,13 @@ void EvaluateDecisionTick(const datetime m5_bar_open)
       g_trade_count++;
       G3RegisterPositionRisk(InpMagic,position_ticket,t.initial_risk_pct);
       G3SaveTradeStates(g_ctx,g_trades,g_trade_count);
+      if(g_fakeout_count<G3_MAX_FAKEOUT_WATCH)
+        {
+         G3FakeoutInit(g_fakeouts[g_fakeout_count],position_ticket,_Symbol,
+                       signal_id,side,oc.fill_price,sl_final,(long)m5_bar_open);
+         g_fakeout_count++;
+         G3SaveFakeoutWatches(g_ctx,g_fakeouts,g_fakeout_count);
+        }
       rec.mfe_r=0.0;
      }
 
@@ -965,6 +1048,10 @@ void EmitExitRecord(const G3TradeState &t,const string exit_reason,
    rec.mae_3bars     =t.mae_r_3bars;
    rec.mfe_6bars     =t.mfe_r_6bars;
    rec.mae_6bars     =t.mae_r_6bars;
+   ENUM_G3_TRISTATE f3=G3_TRI_NA,f6=G3_TRI_NA;
+   FakeoutVerdict(t.signal_id,f3,f6);
+   rec.fakeout_3     =f3;
+   rec.fakeout_6     =f6;
    rec.holding_bars  =t.bars_held;
    rec.exit_reason   =exit_reason;
    rec.result_r      =result_r;
@@ -1044,6 +1131,13 @@ void ManagePositions()
    //--- contained in the Ask/Bid execution relationship.
    double commission_round_turn=CommissionPerLotRoundTurn(_Symbol,InpMagic);
 
+   //--- Addendum A: STATE_UNCERTAIN keeps protective management running
+   //--- but forbids anything that adds risk. No branch below opens an
+   //--- order or widens a stop, and none of them force-flattens the book
+   //--- merely because the state is uncertain.
+   bool protective_only=(g_state.dd_state==G3_DD_UNCERTAIN ||
+                         g_store_status==G3_STORE_BOTH_LOST);
+
    bool dirty=false;
    for(int i=0;i<g_trade_count;i++)
      {
@@ -1063,6 +1157,19 @@ void ManagePositions()
          G3UnregisterPositionRisk(InpMagic,g_trades[i].ticket);
          g_trades[i].active=false;
          dirty=true;
+         continue;
+        }
+
+      //--- Addendum A: re-read the broker side facts of the position
+      //--- (ticket already selected above, volume and protective orders).
+      double server_sl=PositionGetDouble(POSITION_SL);
+      double server_tp=PositionGetDouble(POSITION_TP);
+      bool   has_server_protection=(server_sl!=0.0 || server_tp!=0.0);
+      if(!has_server_protection && protective_only)
+        {
+         //--- nothing reconstructible to lean on and the state store is
+         //--- unreadable: leave the position exactly as the broker holds
+         //--- it rather than acting on untrusted state.
          continue;
         }
 
@@ -1207,6 +1314,90 @@ void ManagePositions()
   }
 
 //+------------------------------------------------------------------+
+//| Addendum E (DEV-007) - fakeout_3 / fakeout_6 observation         |
+//|                                                                  |
+//| The window keeps running after the position has closed, so the    |
+//| flag is independent of the exit mode. The bar that contains the   |
+//| entry is bar 1.                                                   |
+//+------------------------------------------------------------------+
+void EmitFakeoutRecord(const G3FakeoutWatch &w)
+  {
+   double equity=AccountInfoDouble(ACCOUNT_EQUITY);
+   G3LogRecord rec;
+   G3LogRecordInit(rec);
+   FillAccountFields(rec,equity,G3DrawdownPct(g_state.peak_equity,equity),
+                     G3DailyEntryLocked(g_state.daily_start_equity,equity));
+   rec.record_type ="FAKEOUT";
+   rec.symbol      =w.symbol;
+   rec.side        =w.side;
+   rec.signal_id   =w.signal_id;
+   rec.m5_bar_time =w.entry_m5_bar;
+   rec.fill_price  =w.entry_price;
+   rec.sl_final    =w.initial_sl;
+   rec.fakeout_3   =w.fakeout_3;
+   rec.fakeout_6   =w.fakeout_6;
+   rec.holding_bars=w.bars_observed;
+   G3LoggerWrite(g_logger,rec);
+  }
+
+void UpdateFakeoutWatches()
+  {
+   if(g_fakeout_count<=0)
+      return;
+   MqlTick tick;
+   if(!SymbolInfoTick(_Symbol,tick))
+      return;
+   bool dirty=false;
+   for(int i=0;i<g_fakeout_count;i++)
+     {
+      if(!g_fakeouts[i].active || g_fakeouts[i].completed)
+         continue;
+      if(g_fakeouts[i].symbol!=_Symbol)
+         continue;
+      int shift=iBarShift(_Symbol,PERIOD_M5,(datetime)g_fakeouts[i].entry_m5_bar,false);
+      if(shift<0)
+         continue;
+      int bar_index=shift+1;            // the entry bar is bar 1
+      G3FakeoutObserve(g_fakeouts[i],bar_index,tick.bid,tick.ask);
+      if(G3FakeoutFinalise(g_fakeouts[i],bar_index))
+        {
+         EmitFakeoutRecord(g_fakeouts[i]);
+         g_fakeouts[i].active=false;
+         dirty=true;
+        }
+     }
+   if(dirty)
+     {
+      int w=0;
+      for(int i=0;i<g_fakeout_count;i++)
+        {
+         if(!g_fakeouts[i].active || g_fakeouts[i].completed)
+            continue;
+         if(w!=i)
+            g_fakeouts[w]=g_fakeouts[i];
+         w++;
+        }
+      g_fakeout_count=w;
+      G3SaveFakeoutWatches(g_ctx,g_fakeouts,g_fakeout_count);
+     }
+  }
+
+//--- Current fakeout verdict for a signal, for the EXIT record.
+void FakeoutVerdict(const string signal_id,ENUM_G3_TRISTATE &f3,ENUM_G3_TRISTATE &f6)
+  {
+   f3=G3_TRI_NA;
+   f6=G3_TRI_NA;
+   for(int i=0;i<g_fakeout_count;i++)
+     {
+      if(g_fakeouts[i].signal_id!=signal_id)
+         continue;
+      f3=g_fakeouts[i].fakeout_3;
+      f6=g_fakeouts[i].fakeout_6;
+      return;
+     }
+  }
+
+//+------------------------------------------------------------------+
 //| OnTick                                                           |
 //+------------------------------------------------------------------+
 void OnTick()
@@ -1214,8 +1405,25 @@ void OnTick()
    if(!g_init_ok)
       return;
 
+   //--- Master Specification v0.4.1a Addendum A order:
+   //---   load -> peak/DD within what is trustworthy
+   //---        -> manage_open_positions_protective
+   //---        -> if STATE_UNCERTAIN: return
+   //---        -> new M5 signal flow
    RefreshAccountState(g_equity,g_dd_pct,g_daily_lock);
    ManagePositions();
+   UpdateFakeoutWatches();
+
+   //--- STATE_UNCERTAIN forbids NEW risk, not the protective management
+   //--- that has already run above. The EA never force-flattens the book
+   //--- merely because the state store is unreadable.
+   if(g_state.dd_state==G3_DD_UNCERTAIN || g_store_status==G3_STORE_BOTH_LOST)
+      return;
+
+   //--- a freshly created state epoch only trades after the next OnInit
+   //--- has confirmed both stores agree (Addendum B).
+   if(g_epoch_restart_required)
+      return;
 
    datetime m5_open=0;
    if(!G3IsDecisionTick(_Symbol,g_last_m5_open,m5_open))

@@ -23,7 +23,8 @@ Generated from `ENUM_G3_REASON` in `src/G3Types.mqh` by
 | `POST_GAP_COOLDOWN` | 4.2 | the H4 reference bar is the first bar completed after a gap wider than twice the period; no new signal is issued |
 | `INDICATOR_NOT_READY` | 5-8 | an indicator buffer has not produced enough values yet |
 | `SIGNAL_ALREADY_CONSUMED` | 4.1 | the signal_id was consumed before; duplicate orders are refused |
-| `STATE_UNCERTAIN` | 10 | both state stores are unrecoverable; all new entries are refused |
+| `STATE_UNCERTAIN` | 11.2 | both state stores are unrecoverable; new entries are refused while protective management of open positions continues (v0.4.1a Addendum A) |
+| `STATE_EPOCH_RESTART_REQUIRED` | 11.2 | a new state epoch was just created; trading resumes only after the next OnInit confirms both stores agree (v0.4.1a Addendum B) |
 | `HARD_STOP_LATCHED` | 10 | the 10% drawdown hard stop is latched; only a manual audited reset clears it |
 | `DAILY_ENTRY_LOCK` | 11 | equity is at or below 98% of the daily start equity |
 | `SL_DISTANCE_ABOVE_MAX` | 9 | stop distance above 2.5 ATR before the broker correction |

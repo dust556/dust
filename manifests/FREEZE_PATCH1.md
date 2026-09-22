@@ -1,5 +1,11 @@
 # G4 Patch-1 Frozen Candidate
 
+> **Superseded 2026-09-22 by Patch-2.** The v0.4.1a Addendum passed the G2
+> delta re-audit and the seven questions listed at the bottom of this record
+> were implemented. This file is kept as the historical freeze record of the
+> tree at `f40086c`; the current state is described by
+> `docs/G4_patch2_report.md` and `manifests/build_manifest.json`.
+
 This is a freeze record, not a release. The code below is frozen pending the
 G1 addendum and the G2 audit of that addendum. No further implementation is
 to be added to this tree.

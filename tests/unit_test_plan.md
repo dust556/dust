@@ -10,7 +10,7 @@ The build uses `-Wall -Wextra -Werror`.
 Terminal-bound behaviour is **not** in scope here; see
 `tests/integration_test_plan.md`.
 
-Total assertions: **179**.
+Total assertions: **207**.
 
 ## test_time_sync
 
@@ -228,7 +228,7 @@ Specification: 16 research log schema integrity
 |---------|-----------|
 | `T-047` | test_log_schema_column_count_matches |
 | `T-047b` | test_log_has_all_spec_fields |
-| `T-047c` | test_fakeout_columns_marked_undefined |
+| `T-047c` | test_fakeout_columns_are_tristate |
 | `T-047d` | test_reason_code_text |
 | `T-047e` | test_side_text |
 
@@ -267,3 +267,38 @@ Specification: regression cover for the conformance fixes DEV-001, 002, 004, 009
 | `R-007i` | test_log_row_matches_header_after_changes |
 | `R-007j` | test_log_row_carries_spec_store_status |
 | `R-007k` | test_log_row_keeps_store_detail |
+
+## test_patch2_regressions
+
+Specification: v0.4.1a Addendum A/B/E: STATE_UNCERTAIN protective management, audited manual recovery and state epochs, fakeout_3 / fakeout_6
+
+| test id | assertion |
+|---------|-----------|
+| `Q-001a` | test_fakeout_touch_buy_uses_bid |
+| `Q-001b` | test_fakeout_touch_sell_uses_ask |
+| `Q-001c` | test_fakeout_touch_needs_a_stop |
+| `Q-002a` | test_fakeout_starts_na |
+| `Q-002b` | test_fakeout_touch_within_3_bars_sets_both |
+| `Q-003a` | test_fakeout_3_closes_false_after_bar_3 |
+| `Q-003b` | test_fakeout_6_still_catches_a_late_touch |
+| `Q-004` | test_fakeout_no_touch_closes_false |
+| `Q-005a` | test_fakeout_gap_detected |
+| `Q-005b` | test_fakeout_gap_stays_na |
+| `Q-005c` | test_fakeout_gap_completes_as_na |
+| `Q-006` | test_fakeout_true_survives_a_restart |
+| `Q-007` | test_fakeout_window_is_closed_after_6_bars |
+| `Q-008` | test_tristate_text |
+| `Q-009a` | test_recovery_not_requested |
+| `Q-009b` | test_recovery_refused_when_state_is_fine |
+| `Q-009c` | test_recovery_needs_a_named_operator |
+| `Q-009d` | test_new_epoch_needs_a_g1_review_record |
+| `Q-009e` | test_new_epoch_needs_a_flat_book |
+| `Q-009f` | test_new_epoch_admissible |
+| `Q-009g` | test_reconcile_is_audit_only |
+| `Q-010a` | test_unknown_latch_stays_latched |
+| `Q-010b` | test_known_latch_is_carried_over |
+| `Q-011a` | test_epoch_rebases_peak_and_daily |
+| `Q-011b` | test_epoch_with_unknown_latch_stays_hard_stopped |
+| `Q-012a` | test_epoch_survives_round_trip |
+| `Q-012b` | test_merge_keeps_the_newer_epoch |
+| `Q-013` | test_schema_2_record_rejected |

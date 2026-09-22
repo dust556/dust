@@ -17,14 +17,14 @@
 #include "ExitManager.mqh"
 
 #define G3_LOG_SCHEMA_VERSION "1"
-//--- Master Specification v0.4 does not define fakeout_3 / fakeout_6.
-//--- The columns exist but are never populated with an invented value.
-//--- See docs/change_requests.md CR-002.
-#define G3_UNDEFINED_TOKEN "NA_SPEC_UNDEFINED"
+//--- Master Specification v0.4.1a Addendum E defines fakeout_3 and
+//--- fakeout_6 as an exit-mode independent tri-state: TRUE / FALSE / NA.
+//--- NA is emitted when the observation window could not be completed
+//--- and is never collapsed to FALSE.
 
 struct G3LogRecord
   {
-   string            record_type;        // EVAL | ENTRY | EXIT
+   string            record_type;        // EVAL | SHADOW | ENTRY | PARTIAL | EXIT | FAKEOUT
    long              time_server;
    long              time_utc;
    string            symbol;
@@ -109,6 +109,8 @@ struct G3LogRecord
    double            mae_3bars;
    double            mfe_6bars;
    double            mae_6bars;
+   ENUM_G3_TRISTATE  fakeout_3;
+   ENUM_G3_TRISTATE  fakeout_6;
    int               holding_bars;
    string            exit_reason;
    double            result_r;
@@ -135,6 +137,8 @@ struct G3LogRecord
    ENUM_G3_REASON    skip_reason;
    uint              retcode;
    ENUM_G3_STORE_STATUS store_status;
+   long              state_epoch;
+   ENUM_G3_RECOVERY_RESULT recovery_result;
    string            run_id;
   };
 
@@ -172,6 +176,7 @@ void G3LogRecordInit(G3LogRecord &r)
    r.mfe_r=0.0; r.mae_r=0.0;
    r.mfe_3bars=0.0; r.mae_3bars=0.0;
    r.mfe_6bars=0.0; r.mae_6bars=0.0;
+   r.fakeout_3=G3_TRI_NA; r.fakeout_6=G3_TRI_NA;
    r.holding_bars=0; r.exit_reason=""; r.result_r=0.0; r.realized_pl=0.0;
    r.dd_pct=0.0; r.dd_state=G3_DD_NORMAL; r.daily_lock=false;
    r.hard_stop_latched=false;
@@ -181,7 +186,8 @@ void G3LogRecordInit(G3LogRecord &r)
    r.corr_state=G3_CORR_READY; r.corr_unavailable=false; r.corr_warmup_days=0;
    r.unknown_cluster_risk=0.0; r.open_positions=0;
    r.skip_reason=G3_R_NONE; r.retcode=0;
-   r.store_status=G3_STORE_FRESH; r.run_id="";
+   r.store_status=G3_STORE_FRESH; r.state_epoch=0;
+   r.recovery_result=G3_RECOVERY_NOT_REQUESTED; r.run_id="";
   }
 
 //+------------------------------------------------------------------+
@@ -211,7 +217,8 @@ string G3LogHeader()
    h=h+"dd_pct,dd_state,daily_lock,hard_stop_latched,peak_equity,equity,balance,";
    h=h+"total_risk,currency_exposure,corr_cluster_risk,corr_cluster_risk_raw,";
    h=h+"corr_state,corr_unavailable,corr_warmup_days,unknown_cluster_risk,open_positions,";
-   h=h+"skip_reason,retcode,state_store_status,state_store_detail,run_id";
+   h=h+"skip_reason,retcode,state_store_status,state_store_detail,";
+   h=h+"state_epoch,recovery_result,run_id";
    return(h);
   }
 
@@ -265,7 +272,7 @@ string G3LogRecordToLine(const G3LogRecord &r)
    s=s+DoubleToString(r.mfe_r,6)+","+DoubleToString(r.mae_r,6)+","
       +DoubleToString(r.mfe_3bars,6)+","+DoubleToString(r.mae_3bars,6)+","
       +DoubleToString(r.mfe_6bars,6)+","+DoubleToString(r.mae_6bars,6)+",";
-   s=s+G3_UNDEFINED_TOKEN+","+G3_UNDEFINED_TOKEN+",";
+   s=s+G3TriStateToString(r.fakeout_3)+","+G3TriStateToString(r.fakeout_6)+",";
    s=s+IntegerToString(r.holding_bars)+","+r.exit_reason+","
       +DoubleToString(r.result_r,6)+","+DoubleToString(r.realized_pl,4)+",";
    s=s+DoubleToString(r.dd_pct,4)+","+G3DDStateToString(r.dd_state)+","
@@ -279,7 +286,9 @@ string G3LogRecordToLine(const G3LogRecord &r)
       +DoubleToString(r.unknown_cluster_risk,4)+","+IntegerToString(r.open_positions)+",";
    s=s+G3ReasonToString(r.skip_reason)+","+IntegerToString((long)r.retcode)+","
       +G3StoreStatusToSpec(r.store_status)+","
-      +G3StoreStatusToString(r.store_status)+","+r.run_id;
+      +G3StoreStatusToString(r.store_status)+",";
+   s=s+IntegerToString(r.state_epoch)+","
+      +G3RecoveryResultToString(r.recovery_result)+","+r.run_id;
    return(s);
   }
 

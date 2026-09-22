@@ -64,6 +64,122 @@ struct PartialPlan
   };
 
 //+------------------------------------------------------------------+
+//| Addendum E (DEV-007) - fakeout_3 / fakeout_6                     |
+//|                                                                  |
+//| The flag is exit-mode independent: it asks whether the price      |
+//| would have reached the INITIAL SL within the first N M5 bars      |
+//| after entry, whatever actually closed the position. The bar that  |
+//| contains the entry counts as bar 1. A window that could not be    |
+//| observed in full yields NA, never false.                          |
+//+------------------------------------------------------------------+
+#define G3_FAKEOUT_N3 3
+#define G3_FAKEOUT_N6 6
+
+struct G3FakeoutWatch
+  {
+   bool              active;
+   bool              completed;
+   ulong             ticket;
+   string            symbol;
+   string            signal_id;
+   ENUM_G3_SIDE      side;
+   double            entry_price;
+   double            initial_sl;
+   long              entry_m5_bar;
+   int               bars_observed;      // 1-based index of the newest observed bar
+   bool              observation_gap;    // one or more bars of the window were missed
+   ENUM_G3_TRISTATE  fakeout_3;
+   ENUM_G3_TRISTATE  fakeout_6;
+  };
+
+//--- Addendum E: BUY touches the initial SL on the Bid side, SELL on
+//--- the Ask side.
+bool G3FakeoutTouched(const ENUM_G3_SIDE side,const double bid,const double ask,
+                      const double initial_sl)
+  {
+   if(initial_sl<=0.0)
+      return(false);
+   if(side==G3_SIDE_BUY)
+      return(bid<=initial_sl);
+   if(side==G3_SIDE_SELL)
+      return(ask>=initial_sl);
+   return(false);
+  }
+
+void G3FakeoutInit(G3FakeoutWatch &w,const ulong ticket,const string symbol,
+                   const string signal_id,const ENUM_G3_SIDE side,
+                   const double entry_price,const double initial_sl,
+                   const long entry_m5_bar)
+  {
+   w.active         =true;
+   w.completed      =false;
+   w.ticket         =ticket;
+   w.symbol         =symbol;
+   w.signal_id      =signal_id;
+   w.side           =side;
+   w.entry_price    =entry_price;
+   w.initial_sl     =initial_sl;
+   w.entry_m5_bar   =entry_m5_bar;
+   w.bars_observed  =1;               // the entry bar itself is bar 1
+   w.observation_gap=false;
+   w.fakeout_3      =G3_TRI_NA;
+   w.fakeout_6      =G3_TRI_NA;
+  }
+
+//--- One observation at `bar_index` (1-based, the entry bar is 1).
+//--- A bar index that skips ahead by more than one marks the window as
+//--- incompletely observed.
+void G3FakeoutObserve(G3FakeoutWatch &w,const int bar_index,
+                      const double bid,const double ask)
+  {
+   if(!w.active || w.completed)
+      return;
+   if(bar_index<1)
+      return;
+   if(bar_index>w.bars_observed)
+     {
+      if(bar_index>w.bars_observed+1)
+         w.observation_gap=true;
+      w.bars_observed=bar_index;
+     }
+   if(bar_index>G3_FAKEOUT_N6)
+      return;
+   if(!G3FakeoutTouched(w.side,bid,ask,w.initial_sl))
+      return;
+   if(bar_index<=G3_FAKEOUT_N3 && w.fakeout_3!=G3_TRI_TRUE)
+      w.fakeout_3=G3_TRI_TRUE;
+   if(bar_index<=G3_FAKEOUT_N6 && w.fakeout_6!=G3_TRI_TRUE)
+      w.fakeout_6=G3_TRI_TRUE;
+  }
+
+//--- Close out the windows once they are behind us. An unresolved window
+//--- becomes FALSE only when every bar of it was actually observed;
+//--- otherwise it stays NA.
+//--- Returns true on the call that completes the 6 bar window.
+bool G3FakeoutFinalise(G3FakeoutWatch &w,const int current_bar_index)
+  {
+   if(!w.active || w.completed)
+      return(false);
+   if(current_bar_index>G3_FAKEOUT_N3 && w.fakeout_3==G3_TRI_NA && !w.observation_gap)
+      w.fakeout_3=G3_TRI_FALSE;
+   if(current_bar_index>G3_FAKEOUT_N6)
+     {
+      if(w.fakeout_6==G3_TRI_NA && !w.observation_gap)
+         w.fakeout_6=G3_TRI_FALSE;
+      w.completed=true;
+      return(true);
+     }
+   return(false);
+  }
+
+//--- A restart cannot prove what happened while the EA was down.
+void G3FakeoutMarkObservationGap(G3FakeoutWatch &w)
+  {
+   if(w.active && !w.completed)
+      w.observation_gap=true;
+  }
+
+//+------------------------------------------------------------------+
 //| PURE                                                             |
 //+------------------------------------------------------------------+
 

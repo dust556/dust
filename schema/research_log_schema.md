@@ -10,13 +10,19 @@ by `tools/gen_log_schema.py`. Do not edit it by hand.
 * One file per symbol instance per run.
 * Every decision_tick writes exactly one `EVAL` row, including
   candidates that are skipped, so rejection statistics are complete.
+* A candidate that clears every strategy gate also writes a `SHADOW`
+  row BEFORE any portfolio guard can drop it. The offline
+  chronological portfolio replay of v0.4.1a Addendum F re-decides
+  those rows against the shared state.
 * Executed signals add an `ENTRY` row, partial closes a `PARTIAL` row,
   and the close of a position an `EXIT` row.
+* A `FAKEOUT` row closes the 6 bar diagnostic window of Addendum E,
+  which keeps running after the position itself has closed.
 * Rows are joined on `signal_id`.
 * Times are integer epoch seconds; `time_server` is broker time.
 * Field names follow Master Specification v0.4 section 12.
 
-Column count: **104**.
+Column count: **106**.
 
 | # | column | unit | meaning |
 |---|--------|------|---------|
@@ -97,8 +103,8 @@ Column count: **104**.
 | 75 | `mae_3bars` | R | MAE within the first 3 M5 bars |
 | 76 | `mfe_6bars` | R | MFE within the first 6 M5 bars |
 | 77 | `mae_6bars` | R | MAE within the first 6 M5 bars |
-| 78 | `fakeout_3` | NA | NOT DEFINED by Master Specification v0.4 - always NA_SPEC_UNDEFINED, see CR-002 |
-| 79 | `fakeout_6` | NA | NOT DEFINED by Master Specification v0.4 - always NA_SPEC_UNDEFINED, see CR-002 |
+| 78 | `fakeout_3` | TRUE/FALSE/NA | v0.4.1a Addendum E: the price reached the INITIAL SL within 3 M5 bars of entry (BUY on the Bid, SELL on the Ask), independent of the exit mode. NA when the window could not be fully observed |
+| 79 | `fakeout_6` | TRUE/FALSE/NA | v0.4.1a Addendum E: same over 6 M5 bars. NA is never collapsed to FALSE |
 | 80 | `holding_bars` | M5 bars | M5 bars between entry and the record |
 | 81 | `exit_reason` | string | EXIT_TP / EXIT_SL / EXIT_BE / EXIT_TRAIL / EXIT_PARTIAL / EXIT_TIMEOUT / EXIT_MANUAL_OR_EXTERNAL |
 | 82 | `result_r` | R | total realised P/L divided by the initial RiskMoney |
@@ -123,11 +129,14 @@ Column count: **104**.
 | 101 | `retcode` | int | MT5 trade server return code |
 | 102 | `state_store_status` | enum | OK / RECOVERED / UNCERTAIN, exactly as named by spec 12 |
 | 103 | `state_store_detail` | enum | internal detail: STORE_OK / STORE_FILE_ONLY / STORE_GV_ONLY / STORE_MISMATCH_CONSERVATIVE / STORE_BOTH_LOST / STORE_FRESH |
-| 104 | `run_id` | string | research run identifier from InpRunId |
+| 104 | `state_epoch` | int | state epoch id; incremented only by an audited manual recovery (v0.4.1a Addendum B). Performance must not be aggregated across epochs |
+| 105 | `recovery_result` | enum | outcome of an operator requested recovery on this run (NOT_REQUESTED / RECONCILED_AUDITED / EPOCH_CREATED / REFUSED_*) |
+| 106 | `run_id` | string | research run identifier from InpRunId |
 
-## Fields not populated
+## Tri-state fields
 
-`fakeout_3` and `fakeout_6` are required by section 16 but are not
-defined anywhere in Master Specification v0.4. The columns are emitted
-with the literal token `NA_SPEC_UNDEFINED` and are never filled with an
-invented definition. See `docs/change_requests.md` CR-002.
+`fakeout_3` and `fakeout_6` are TRUE, FALSE or NA. NA means the six bar
+observation window could not be completed - for example the EA was
+restarted inside it - and is never written as FALSE. A row whose
+window is still open also reads NA; the closing verdict arrives on the
+`FAKEOUT` row for that `signal_id`.

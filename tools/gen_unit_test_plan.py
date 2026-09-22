@@ -13,6 +13,7 @@ SECTIONS = {
  "test_state_store": "10 StateStore, dual store reconciliation, exactly-once consume",
  "test_signal_ledger": "4.1 per-symbol signal ledger, exactly-once consume (DEV-003)",
  "test_dev_regressions": "regression cover for the conformance fixes DEV-001, 002, 004, 009-016",
+ "test_patch2_regressions": "v0.4.1a Addendum A/B/E: STATE_UNCERTAIN protective management, audited manual recovery and state epochs, fakeout_3 / fakeout_6",
  "test_dd_state_machine": "10/11 drawdown state machine, hysteresis, latch, DailyEntryLock",
  "test_risk_and_lots": "9 stop placement, risk money, lot sizing, post-fill risk",
  "test_deviation": "13 PipSize, deviation computation and hard cap",
@@ -27,7 +28,7 @@ def main():
     text = open(SRC, encoding="utf-8").read()
     groups, current = [], None
     for line in text.splitlines():
-        m = re.match(r"static void (test_[a-z_]+)\(\)", line)
+        m = re.match(r"static void (test_[a-z0-9_]+)\(\)", line)
         if m:
             current = (m.group(1), [])
             groups.append(current)

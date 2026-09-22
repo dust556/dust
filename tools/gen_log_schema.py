@@ -90,8 +90,8 @@ DESC = {
  "mae_3bars": ("R", "MAE within the first 3 M5 bars"),
  "mfe_6bars": ("R", "MFE within the first 6 M5 bars"),
  "mae_6bars": ("R", "MAE within the first 6 M5 bars"),
- "fakeout_3": ("NA", "NOT DEFINED by Master Specification v0.4 - always NA_SPEC_UNDEFINED, see CR-002"),
- "fakeout_6": ("NA", "NOT DEFINED by Master Specification v0.4 - always NA_SPEC_UNDEFINED, see CR-002"),
+ "fakeout_3": ("TRUE/FALSE/NA", "v0.4.1a Addendum E: the price reached the INITIAL SL within 3 M5 bars of entry (BUY on the Bid, SELL on the Ask), independent of the exit mode. NA when the window could not be fully observed"),
+ "fakeout_6": ("TRUE/FALSE/NA", "v0.4.1a Addendum E: same over 6 M5 bars. NA is never collapsed to FALSE"),
  "holding_bars": ("M5 bars", "M5 bars between entry and the record"),
  "exit_reason": ("string", "EXIT_TP / EXIT_SL / EXIT_BE / EXIT_TRAIL / EXIT_PARTIAL / EXIT_TIMEOUT / EXIT_MANUAL_OR_EXTERNAL"),
  "result_r": ("R", "total realised P/L divided by the initial RiskMoney"),
@@ -116,6 +116,8 @@ DESC = {
  "retcode": ("int", "MT5 trade server return code"),
  "state_store_status": ("enum", "OK / RECOVERED / UNCERTAIN, exactly as named by spec 12"),
  "state_store_detail": ("enum", "internal detail: STORE_OK / STORE_FILE_ONLY / STORE_GV_ONLY / STORE_MISMATCH_CONSERVATIVE / STORE_BOTH_LOST / STORE_FRESH"),
+ "state_epoch": ("int", "state epoch id; incremented only by an audited manual recovery (v0.4.1a Addendum B). Performance must not be aggregated across epochs"),
+ "recovery_result": ("enum", "outcome of an operator requested recovery on this run (NOT_REQUESTED / RECONCILED_AUDITED / EPOCH_CREATED / REFUSED_*)"),
  "run_id": ("string", "research run identifier from InpRunId"),
 }
 
@@ -144,8 +146,14 @@ def main():
     lines.append("* One file per symbol instance per run.")
     lines.append("* Every decision_tick writes exactly one `EVAL` row, including")
     lines.append("  candidates that are skipped, so rejection statistics are complete.")
+    lines.append("* A candidate that clears every strategy gate also writes a `SHADOW`")
+    lines.append("  row BEFORE any portfolio guard can drop it. The offline")
+    lines.append("  chronological portfolio replay of v0.4.1a Addendum F re-decides")
+    lines.append("  those rows against the shared state.")
     lines.append("* Executed signals add an `ENTRY` row, partial closes a `PARTIAL` row,")
     lines.append("  and the close of a position an `EXIT` row.")
+    lines.append("* A `FAKEOUT` row closes the 6 bar diagnostic window of Addendum E,")
+    lines.append("  which keeps running after the position itself has closed.")
     lines.append("* Rows are joined on `signal_id`.")
     lines.append("* Times are integer epoch seconds; `time_server` is broker time.")
     lines.append("* Field names follow Master Specification v0.4 section 12.")
@@ -158,12 +166,13 @@ def main():
         unit, desc = DESC[c]
         lines.append("| %d | `%s` | %s | %s |" % (i, c, unit, desc))
     lines.append("")
-    lines.append("## Fields not populated")
+    lines.append("## Tri-state fields")
     lines.append("")
-    lines.append("`fakeout_3` and `fakeout_6` are required by section 16 but are not")
-    lines.append("defined anywhere in Master Specification v0.4. The columns are emitted")
-    lines.append("with the literal token `NA_SPEC_UNDEFINED` and are never filled with an")
-    lines.append("invented definition. See `docs/change_requests.md` CR-002.")
+    lines.append("`fakeout_3` and `fakeout_6` are TRUE, FALSE or NA. NA means the six bar")
+    lines.append("observation window could not be completed - for example the EA was")
+    lines.append("restarted inside it - and is never written as FALSE. A row whose")
+    lines.append("window is still open also reads NA; the closing verdict arrives on the")
+    lines.append("`FAKEOUT` row for that `signal_id`.")
     lines.append("")
     open(OUT, "w", encoding="utf-8").write("\n".join(lines))
     print("wrote %s (%d columns)" % (OUT, len(cols)))

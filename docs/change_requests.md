@@ -4,9 +4,15 @@
 (Master Specification v0.4, G2 Re-Audit Report v0.4, G3研究開始記録).
 Evidence and full reasoning: `docs/G4_reconciliation_report.md`.
 
-**Patched 2026-09-22** — DEV-001, DEV-002, DEV-003, DEV-004, DEV-008 and
-DEV-009..DEV-013, DEV-015, DEV-016 are now **FIXED** in the source; see
-`docs/G4_patch_report.md` and section H below.
+**Patched 2026-09-22 (Patch-1)** — DEV-001, DEV-002, DEV-003, DEV-004,
+DEV-008 and DEV-009..DEV-013, DEV-015, DEV-016 are **FIXED**; see
+`docs/G4_patch_report.md` and section H.
+
+**Patched 2026-09-22 (Patch-2)** — Master Specification v0.4.1a Addendum
+passed the G2 delta re-audit (BLOCKER 0 / HIGH 0 / PASS), and all seven
+remaining design questions are now **IMPLEMENTED**: DEV-005, DEV-006,
+DEV-007, DEV-014, DEV-017, ISSUE-003 and ISSUE-013. See
+`docs/G4_patch2_report.md` and section I.
 
 Severity: **BLOCKER** stops G3 numbers from being citable. **HIGH** changes
 results materially. **MEDIUM** changes results in identifiable cases.
@@ -24,24 +30,39 @@ results materially. **MEDIUM** changes results in identifiable cases.
 
 ## B. Open HIGH
 
-| id | issue | note |
-|----|-------|------|
-| ISSUE-003 / CR-003 | The MT5 strategy tester runs exactly one expert, so the portfolio rules of spec 11.4 cannot be produced in a backtest with one instance per symbol. | Held open by instruction. Options (a) single-instance multi-symbol research mode, (b) offline portfolio replay of the EVAL/ENTRY/EXIT logs, (c) forward/live only. The implementation does not choose. |
-| **DEV-005** / CR-006R | Spec 16 registers 41 parameters with a provenance class; every H-class parameter requires OAT sensitivity (13.4), and spec 14.1 fails G3 if any registered OAT parameter or test is unreported. The EA exposes three inputs; RESTRICTED ScoreThreshold (16: baseline 6, OAT 5/6/7) and Deviation Hard Cap (9.3 / 16: 1.0/2.0/3.0 pips) are compile-time constants. | The execution method must be decided by G1/G2: EA inputs, or one build per OAT point. 13.4 forbids a brute-force grid, so simply exposing 30 inputs is not automatically correct. |
-| **DEV-006** / CR-015 | Spec 13.5 and the G3 start record define execution stress as a spread **multiplier** (x1.5 / x2.0 / x3.0) plus adverse slippage of 0.25 / 0.50 / 1.00 x observed spread on entry and exit. The EA offers an absolute extra-spread input and no slippage model. | Spec 14.1 requires Expectancy_R > 0 under Stress-1, which cannot currently be evaluated. |
+*(none)*
+
+Superseded entries:
+| ISSUE-003 / CR-003 | CLOSED by Addendum F, implemented in Patch-2. |
+| DEV-005 / CR-006R | CLOSED by Addendum C, implemented in Patch-2. |
+| DEV-006 / CR-015 | CLOSED by Addendum D, implemented in Patch-2. |
 
 ## C. Open MEDIUM
 
 | id | issue |
 |----|-------|
-| **DEV-007** / CR-016 | Spec 12 defines `fakeout_3 / fakeout_6` as "breakout後3/6本以内反転SL等の診断flag" and 7.2 refers to the reversal-SL rate within 3/6 bars after entry. The EA emits `NA_SPEC_UNDEFINED`. The residual ambiguity is whether "反転SL等" covers only an SL fill, and whether the origin is entry or breakout — hence CR-016. Spec 13.6 and the G3 start record require a fakeout subgroup analysis. |
+| N-3 (G2 delta re-audit, non-blocking) | The cross-check windows are chosen on a volatility extreme, which may not be where simultaneous candidates are dense. Implemented as a **disclosure**: the simultaneous candidate count is reported per window and a window below the disclosure level is annotated as of limited representativeness. No new PASS threshold was added. |
 
 ## D. Open LOW
 
 | id | issue |
 |----|-------|
-| DEV-014 | Appendix A returns before `manage_open_positions()` under STATE_UNCERTAIN; the implementation follows 11.2 and keeps managing open positions while refusing new entries. Not uniquely determined by the text, so it was left unchanged; which reading governs should be confirmed. |
-| DEV-017 | Spec 11.2 requires manual recovery from STATE_UNCERTAIN but does not give the procedure. The implementation never resumes automatically, which satisfies 14.2. |
+| LOW-4 (G2 delta re-audit, non-blocking) | There is no third-party procedure that confirms a TECHNICAL_RERUN really was an infrastructure failure. Implemented as a **review queue**: every TECHNICAL_RERUN entry carries `review_required` and is listed in the manifest for later G2/G3 sampling. No new PASS threshold was added. |
+
+Superseded: DEV-014 and DEV-017 were resolved by Addendum A and Addendum B
+and implemented in Patch-2.
+
+## I. IMPLEMENTED by Patch-2 (see `docs/G4_patch2_report.md`)
+
+| id | authority | implementation |
+|----|-----------|----------------|
+| DEV-014 | Addendum A | `OnTick()` runs protective management first and returns before any new signal work under STATE_UNCERTAIN; no forced flat; peak/DD are not written while the state is untrusted. Regression Q-005..Q-007, I-030. |
+| DEV-017 | Addendum B | `G3RecoveryPrecheck()` / `G3ManualRecover()` / `G3BuildEpochState()`: operator named, G1 review record required, flat book required, unknown hard stop never cleared, everything audited, restart required before trading resumes. Regression Q-009..Q-013. |
+| DEV-005 | Addendum C | `tools/g3research/oat_pipeline.py`: OAT on Research IS only, family venue by kind, complete family report, freeze, diagnostic WF with `wf_iteration_manifest`, Static OOS one-shot. Regression P-300, P-400. |
+| DEV-006 | Addendum D | `tools/g3research/stress_replay.py`: closed scenario table, adverse on both legs, stressed geometry restaged, four-condition Base parity gate. Regression P-500. |
+| DEV-007 | Addendum E | `G3FakeoutWatch` in `src/ExitManager.mqh` plus the EA observation loop: initial entry / initial SL reference, entry bar is bar 1, exit-mode independent, tri-state with NA. Regression Q-001..Q-008. |
+| ISSUE-003 | Addendum F | `SHADOW` records in the EA plus `tools/g3research/portfolio_replay.py`: fixed tie-break order, one shared state machine, cross-check period selection and four-condition gate, N-3 disclosure. Regression P-600..P-900. |
+| ISSUE-013 | Addendum G | `tools/g3research/data_intake.py`: 60-71 months trim to the latest 60, surplus excluded from gate performance and from WF folds, manifest records the window. Regression P-100, P-200. |
 
 ## H. FIXED in the source (see `docs/G4_patch_report.md`)
 

@@ -899,9 +899,10 @@ static void test_log_schema()
    int cols=G3LogLineColumnCount(line);
    CHECK("T-047 test_log_schema_column_count_matches", head==cols);
    CHECK("T-047b test_log_has_all_spec_fields", head>=80);
-   //--- the undefined fakeout columns are never filled with a guess
-   CHECK("T-047c test_fakeout_columns_marked_undefined",
-         StringFind(line,G3_UNDEFINED_TOKEN,0)>0);
+   //--- Addendum E: the fakeout columns carry a tri-state, and an
+   //--- unresolved window is NA rather than a guessed FALSE.
+   CHECK("T-047c test_fakeout_columns_are_tristate",
+         StringFind(line,"NA",0)>0 && StringFind(line,"NA_SPEC_UNDEFINED",0)<0);
    //--- reason codes are never emitted as raw integers
    CHECK("T-047d test_reason_code_text",
          StringFind(line,"TOTAL_SCORE_BELOW_THRESHOLD",0)>0);
@@ -1053,6 +1054,159 @@ static void test_dev_regressions()
   }
 
 //+------------------------------------------------------------------+
+//| Patch-2 regressions: Master Specification v0.4.1a Addendum A/B/E |
+//+------------------------------------------------------------------+
+static void test_patch2_regressions()
+  {
+   //--- Addendum E (DEV-007): the touch rule is side dependent.
+   CHECK("Q-001a test_fakeout_touch_buy_uses_bid",
+         G3FakeoutTouched(G3_SIDE_BUY,1.09900,1.09912,1.09900)
+         && !G3FakeoutTouched(G3_SIDE_BUY,1.09901,1.09913,1.09900));
+   CHECK("Q-001b test_fakeout_touch_sell_uses_ask",
+         G3FakeoutTouched(G3_SIDE_SELL,1.10088,1.10100,1.10100)
+         && !G3FakeoutTouched(G3_SIDE_SELL,1.10087,1.10099,1.10100));
+   CHECK("Q-001c test_fakeout_touch_needs_a_stop",
+         !G3FakeoutTouched(G3_SIDE_BUY,1.0,1.0,0.0));
+
+   //--- a touch inside the first three bars sets both windows
+   G3FakeoutWatch w;
+   G3FakeoutInit(w,1,"EURUSD","EURUSD#1",G3_SIDE_BUY,1.10000,1.09900,1700000000);
+   CHECK("Q-002a test_fakeout_starts_na",
+         w.fakeout_3==G3_TRI_NA && w.fakeout_6==G3_TRI_NA && w.bars_observed==1);
+   G3FakeoutObserve(w,1,1.10010,1.10022);
+   G3FakeoutObserve(w,2,1.09900,1.09912);
+   CHECK("Q-002b test_fakeout_touch_within_3_bars_sets_both",
+         w.fakeout_3==G3_TRI_TRUE && w.fakeout_6==G3_TRI_TRUE);
+
+   //--- a touch after bar 3 but inside bar 6 sets only the 6 bar window
+   G3FakeoutWatch late;
+   G3FakeoutInit(late,2,"EURUSD","EURUSD#2",G3_SIDE_BUY,1.10000,1.09900,1700000000);
+   for(int b=1;b<=4;b++)
+      G3FakeoutObserve(late,b,1.10010,1.10022);
+   G3FakeoutFinalise(late,4);
+   CHECK("Q-003a test_fakeout_3_closes_false_after_bar_3",
+         late.fakeout_3==G3_TRI_FALSE && late.fakeout_6==G3_TRI_NA);
+   G3FakeoutObserve(late,5,1.09890,1.09902);
+   CHECK("Q-003b test_fakeout_6_still_catches_a_late_touch",
+         late.fakeout_3==G3_TRI_FALSE && late.fakeout_6==G3_TRI_TRUE);
+
+   //--- never touched: both windows close FALSE, and the watch completes
+   G3FakeoutWatch clean;
+   G3FakeoutInit(clean,3,"EURUSD","EURUSD#3",G3_SIDE_BUY,1.10000,1.09900,1700000000);
+   bool completed=false;
+   for(int b=1;b<=7;b++)
+     {
+      G3FakeoutObserve(clean,b,1.10050,1.10062);
+      if(G3FakeoutFinalise(clean,b))
+         completed=true;
+     }
+   CHECK("Q-004 test_fakeout_no_touch_closes_false",
+         completed && clean.completed
+         && clean.fakeout_3==G3_TRI_FALSE && clean.fakeout_6==G3_TRI_FALSE);
+
+   //--- an incompletely observed window is NA, never FALSE
+   G3FakeoutWatch gapped;
+   G3FakeoutInit(gapped,4,"EURUSD","EURUSD#4",G3_SIDE_BUY,1.10000,1.09900,1700000000);
+   G3FakeoutObserve(gapped,1,1.10050,1.10062);
+   G3FakeoutObserve(gapped,4,1.10050,1.10062);      // bars 2 and 3 missed
+   G3FakeoutFinalise(gapped,4);
+   CHECK("Q-005a test_fakeout_gap_detected", gapped.observation_gap);
+   CHECK("Q-005b test_fakeout_gap_stays_na", gapped.fakeout_3==G3_TRI_NA);
+   for(int b=5;b<=7;b++)
+     {
+      G3FakeoutObserve(gapped,b,1.10050,1.10062);
+      G3FakeoutFinalise(gapped,b);
+     }
+   CHECK("Q-005c test_fakeout_gap_completes_as_na",
+         gapped.completed && gapped.fakeout_6==G3_TRI_NA);
+
+   //--- a positive observation survives a later gap
+   G3FakeoutWatch touched;
+   G3FakeoutInit(touched,5,"EURUSD","EURUSD#5",G3_SIDE_BUY,1.10000,1.09900,1700000000);
+   G3FakeoutObserve(touched,1,1.09880,1.09892);
+   G3FakeoutMarkObservationGap(touched);
+   G3FakeoutFinalise(touched,7);
+   CHECK("Q-006 test_fakeout_true_survives_a_restart",
+         touched.fakeout_3==G3_TRI_TRUE && touched.fakeout_6==G3_TRI_TRUE);
+
+   //--- observations past the 6 bar window change nothing
+   G3FakeoutWatch closed;
+   G3FakeoutInit(closed,6,"EURUSD","EURUSD#6",G3_SIDE_BUY,1.10000,1.09900,1700000000);
+   for(int b=1;b<=7;b++)
+     {
+      G3FakeoutObserve(closed,b,1.10050,1.10062);
+      G3FakeoutFinalise(closed,b);
+     }
+   G3FakeoutObserve(closed,9,1.09000,1.09012);
+   CHECK("Q-007 test_fakeout_window_is_closed_after_6_bars",
+         closed.fakeout_6==G3_TRI_FALSE && closed.completed);
+
+   CHECK("Q-008 test_tristate_text",
+         G3TriStateToString(G3_TRI_TRUE)==string("TRUE")
+         && G3TriStateToString(G3_TRI_FALSE)==string("FALSE")
+         && G3TriStateToString(G3_TRI_NA)==string("NA"));
+
+   //--- Addendum B (DEV-017): recovery is never automatic.
+   CHECK("Q-009a test_recovery_not_requested",
+         G3RecoveryPrecheck(G3_RECOVERY_NONE,true,true,true,0)
+         ==G3_RECOVERY_NOT_REQUESTED);
+   CHECK("Q-009b test_recovery_refused_when_state_is_fine",
+         G3RecoveryPrecheck(G3_RECOVERY_NEW_EPOCH,false,true,true,0)
+         ==G3_RECOVERY_REFUSED_NOT_UNCERTAIN);
+   CHECK("Q-009c test_recovery_needs_a_named_operator",
+         G3RecoveryPrecheck(G3_RECOVERY_NEW_EPOCH,true,false,true,0)
+         ==G3_RECOVERY_REFUSED_NO_OPERATOR);
+   CHECK("Q-009d test_new_epoch_needs_a_g1_review_record",
+         G3RecoveryPrecheck(G3_RECOVERY_NEW_EPOCH,true,true,false,0)
+         ==G3_RECOVERY_REFUSED_NO_G1_RECORD);
+   CHECK("Q-009e test_new_epoch_needs_a_flat_book",
+         G3RecoveryPrecheck(G3_RECOVERY_NEW_EPOCH,true,true,true,1)
+         ==G3_RECOVERY_REFUSED_OPEN_POSITIONS);
+   CHECK("Q-009f test_new_epoch_admissible",
+         G3RecoveryPrecheck(G3_RECOVERY_NEW_EPOCH,true,true,true,0)
+         ==G3_RECOVERY_EPOCH_CREATED);
+   CHECK("Q-009g test_reconcile_is_audit_only",
+         G3RecoveryPrecheck(G3_RECOVERY_RECONCILE,true,true,false,3)
+         ==G3_RECOVERY_RECONCILED_AUDITED);
+
+   //--- an unknown hard stop is never cleared by a new epoch
+   CHECK("Q-010a test_unknown_latch_stays_latched",
+         G3NewEpochHardStop(false,false) && G3NewEpochHardStop(false,true));
+   CHECK("Q-010b test_known_latch_is_carried_over",
+         G3NewEpochHardStop(true,true) && !G3NewEpochHardStop(true,false));
+
+   //--- the epoch rebases the peak but does not erase the latch
+   G3State prior;
+   G3StateInit(prior);
+   prior.epoch_id=2;
+   prior.peak_equity=50000.0;
+   prior.dd_state=G3_DD_UNCERTAIN;
+   G3State epoch=G3BuildEpochState(prior,10000.0,1700000000,true,false);
+   CHECK("Q-011a test_epoch_rebases_peak_and_daily",
+         epoch.epoch_id==3 && Near(epoch.peak_equity,10000.0,1e-9)
+         && Near(epoch.daily_start_equity,10000.0,1e-9)
+         && epoch.dd_state==G3_DD_NORMAL && !epoch.hard_stop_latched);
+   G3State epoch_unknown=G3BuildEpochState(prior,10000.0,1700000000,false,false);
+   CHECK("Q-011b test_epoch_with_unknown_latch_stays_hard_stopped",
+         epoch_unknown.hard_stop_latched
+         && epoch_unknown.dd_state==G3_DD_HARD_STOP);
+
+   //--- the epoch id survives the store round trip and merges forward
+   G3State back;
+   G3StateInit(back);
+   CHECK("Q-012a test_epoch_survives_round_trip",
+         G3ParseStateLine(G3StateToLine(epoch),back) && back.epoch_id==3);
+   G3State older=epoch;
+   older.epoch_id=1;
+   G3State merged=G3MergeConservative(older,epoch);
+   CHECK("Q-012b test_merge_keeps_the_newer_epoch", merged.epoch_id==3);
+
+   //--- a schema 2 record is not silently read as schema 3
+   CHECK("Q-013 test_schema_2_record_rejected",
+         !G3ParseStateLine("v=2|peak=1.00|dd=0|latch=0|dse=1.00|date=0|chk=0",back));
+  }
+
+//+------------------------------------------------------------------+
 int main()
   {
    std::printf("G3 Research EA - host unit tests (pure specification logic)\n");
@@ -1068,6 +1222,7 @@ int main()
    test_signal_logic();
    test_log_schema();
    test_dev_regressions();
+   test_patch2_regressions();
    std::printf("-----------------------------------------------------------\n");
    std::printf("PASSED: %d   FAILED: %d\n",g_pass,g_fail);
    return (g_fail==0)?0:1;
