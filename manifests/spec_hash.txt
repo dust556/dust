@@ -1,4 +1,7 @@
-# SHA-256 of Master Specification v0.4 (authority document)
-# The document was not supplied to this environment, so the hash
-# cannot be computed here. See docs/change_requests.md CR-001.
-SPEC_HASH=PENDING_SPEC_DOCUMENT
+# SHA-256 of the three authority documents (CR-001 CLOSED).
+# master_specification_v0.4 and g2_re_audit_report_v0.4 match the
+# hash table printed inside the G3 research start record.
+SPEC_HASH=229f29920ee411cf008442f56a1061583fc564ad50c979c32bf7996ada7ff965
+MASTER_SPECIFICATION_V0.4=229f29920ee411cf008442f56a1061583fc564ad50c979c32bf7996ada7ff965
+G2_RE_AUDIT_REPORT_V0.4=7d17353844c88030622638abd10c5b475c7f74eea26936b21c87e8c15d64fbeb
+G3_RESEARCH_START_RECORD=d068cdc797a6708629c21df2a085afa6a8a3d46b388f200340e856e1376ab82c

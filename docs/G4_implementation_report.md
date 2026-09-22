@@ -1,5 +1,10 @@
 # G4 Research EA 実装報告書
 
+> **2026-09-22 追記 — 一部は改訂済み。** 権威文書3点を受領し仕様照合を再実施しました。
+> 本書の第11章（ISSUE 17件）と第12章（CR 14件）、および第10章の仮定A-01〜A-14は
+> `docs/G4_reconciliation_report.md` と `docs/change_requests.md` によって**置き換え**られています。
+> 実装内容・テスト結果・ハッシュの記載は有効です（`spec_hash` のみ確定済み）。
+
 | 項目 | 内容 |
 |---|---|
 | 成果物 | G3 Research EA（MetaTrader 5 / MQL5） |

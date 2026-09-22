@@ -1,60 +1,88 @@
 # ISSUES and CHANGE REQUESTS
 
-No item below was resolved by guessing. Where an implementation had to proceed,
-the chosen reading is stated, logged in the research CSV, and listed as an
-assumption in `docs/known_limitations.md`.
+**Re-adjudicated 2026-09-22** against the three authority documents
+(Master Specification v0.4, G2 Re-Audit Report v0.4, G3研究開始記録).
+Evidence and full reasoning: `docs/G4_reconciliation_report.md`.
 
 Severity: **BLOCKER** stops G3 numbers from being citable. **HIGH** changes
 results materially. **MEDIUM** changes results in identifiable cases.
 **LOW** is a clarification.
 
-## ISSUES
+---
 
-| id | severity | issue | current handling |
-|----|----------|-------|------------------|
-| ISSUE-001 | BLOCKER | Master Specification v0.4, G2 Re-Audit Report v0.4 and the G3 research start record were **not present** in the implementation environment (the repository was empty). The implementation traces to the prompt's restatement of the specification only. `spec_hash` cannot be computed. | Implemented from the prompt text; every constant is centralised in one `#define` block per module so it can be diffed against the authority document. See CR-001. |
-| ISSUE-002 | HIGH | Section 12 says "signed correlation >= 0.70". It is not stated whether "signed" means the raw Pearson sign, or the sign adjusted for the trade direction of each leg (so that two positively correlated symbols held in opposite directions do not form a cluster). | Direction adjusted reading implemented for the decision. **Both** values are logged (`corr_cluster_risk`, `corr_cluster_risk_raw`) so the effect is measurable without a rerun. See CR-004. |
-| ISSUE-003 | HIGH | The MT5 strategy tester runs exactly one expert. The decision_tick definition of section 4.1 (first tick of a new M5 bar) is only observable for the chart symbol, which forces one instance per symbol, which in turn makes the portfolio rules of section 12 (MaxPositions, total risk, correlation clusters) **untestable in the strategy tester**. | Per-symbol instances implemented; portfolio state shared through terminal global variables so live/forward runs are correct. Portfolio-level backtests are blocked. See CR-003. |
-| ISSUE-004 | MEDIUM | Section 10 states `Score>=5` for NORMAL and MODERATE, while section 8 registers ScoreThreshold inputs of 4/5/6. It is undefined whether an input of 4 is admissible in NORMAL/MODERATE or is floored at 5. | Implemented as: the registered input applies, RESTRICTED forces `max(6, input)`. This preserves the 4/5/6 sweep the G3 plan requires. See CR-005. |
-| ISSUE-005 | MEDIUM | Section 16 requires `fakeout_3` and `fakeout_6` columns, but no definition of a fakeout exists anywhere in the supplied specification. | Columns emitted with the literal `NA_SPEC_UNDEFINED`. No definition was invented. See CR-002. |
-| ISSUE-006 | MEDIUM | Section 17 requires "OAT target parameters", "Safety stress parameters" and "Execution stress parameters" to be inputs, but the pre-registered list was not supplied. | Only execution stress inputs that cannot change strategy logic were added (`InpStressExtraSpreadPoints`, `InpStressCommissionPerLot`, both neutral by default). No safety-stress parameter was invented; the spec-fixed risk and drawdown constants remain constants. See CR-006. |
-| ISSUE-007 | MEDIUM | The timeframe of `ATR14` in sections 8, 9 and 13, and the shift of the ATR used by the M15 pullback band in section 6, are not stated explicitly. | M5 ATR14 shift 1 for sections 8/9/13 (A-04); M15 ATR14 shift 1 for section 6 (A-03). Both are logged (`atr_m5`, `atr_m15`, `atr_h4`). See CR-007. |
-| ISSUE-008 | MEDIUM | Section 10 gives drawdown thresholds but no drawdown definition (peak equity vs. initial equity vs. balance, and the reset rule for the peak). | `DD% = (PeakEquity - Equity) / PeakEquity * 100`, peak tracked on equity and never reset (A-01, A-12). Logged as `dd_pct` and `peak_equity`. See CR-007. |
-| ISSUE-009 | LOW | Section 13 states both "computed > HardCap -> do not send the order" and "sent deviation = max(1, min(computed, HardCap))". The `min()` branch is unreachable. | Implemented literally: above the cap nothing is sent and `deviation_cap_hit` is set; otherwise `max(1, min(computed, cap))`. See CR-012. |
-| ISSUE-010 | MEDIUM | "cost-adjusted BE" (section 14 B) does not enumerate its cost components (spread only, spread + commission, swap?). | Spread plus the optional commission input, converted to price (A-06). See CR-010. |
-| ISSUE-011 | LOW | Sections 5 and 7 state minimum scores (H4 >= 1, M5 >= 1) but section 6 states no minimum for M15. | Implemented with no M15 minimum, exactly as written. Confirmation requested in CR-011. |
-| ISSUE-012 | BLOCKER | The G3 data inputs are missing: primary tick feed, second independent feed, symbol specifications, initial equity, account currency, data start/end dates, and the Research EA hash. | No backtest was run and no result was fabricated (section 22). See CR-009. |
-| ISSUE-013 | BLOCKER | If only 61-71 months of data exist, Master Specification v0.4 defines no IS / OOS / Walk-Forward split. | No split was invented. See CR-008. |
-| ISSUE-014 | MEDIUM | The correlation input series is unspecified (prices, simple returns or log returns; 60 bars or 60 returns). | D1 close-to-close log returns, 60 returns from 61 closed bars (A-05); `corr_warmup_days` is logged. See CR-007. |
-| ISSUE-015 | LOW | No exit procedure is defined for `STATE_UNCERTAIN`. | The EA refuses all new entries and keeps managing open positions. See CR-013. |
-| ISSUE-016 | BLOCKER | Section 21 requires a compile gate of 0 errors / 0 warnings. No MQL5 compiler exists in this environment (Linux container, no MetaEditor, no Wine). | Compile status reported as NOT_RUN. A static structural check plus an executable host test harness for the pure logic are provided in place of, not instead of, the compile gate. See CR-014. |
-| ISSUE-017 | LOW | Whether MaxPositions = 3 is per account or per symbol is not stated. | Account-wide across all positions carrying the EA magic number. |
+## A. Open BLOCKER
 
-## CHANGE REQUESTS
+| id | issue | why it is still open |
+|----|-------|----------------------|
+| ISSUE-016 / CR-014 | The section 21 compile gate (MetaEditor, 0 errors / 0 warnings) has not been executed; the 29 integration cases have not been run. | No MQL5 toolchain in this environment. Held open by instruction. |
+| ISSUE-012 / CR-009 | Primary tick feed, second independent feed, symbol specifications, initial equity, account currency and cost information are not supplied (spec 13.1). | Not received. The G3 start record states the same gap. Held open by instruction. |
+| ISSUE-013 / CR-008 | No fixed data split exists for a 61-71 month dataset. Spec 13.2 defines only the 72 month case and the "60 months only" fallback. | The G3 start record states explicitly: "61〜71か月…の固定分割はv0.4に明示されていない。分割を推測して研究を開始しない。G1への仕様照会又はCRの対象として保留する". Held open by instruction. |
+| **DEV-001** | Spec 6 requires the M15 pullback band to use the **ATR of the same shift** ("各Low/Highは同じshiftのEMA20/ATRと比較"). The implementation applies the shift-1 ATR to all three shifts. | Conformance defect found by this reconciliation. Affects m15_score and therefore every entry decision. Not fixed: this turn was scoped to reconciliation only. |
+| **DEV-002** | Spec 4.2 / 15.1 / appendix A require a post-gap cooldown: after a higher-timeframe gap of more than twice the normal period, the first completed H4 bar must produce no new signal. Gap detection is a TimeSync responsibility. | Not implemented at all. Spec 14.2 lists an implementation that differs from the specification as an automatic FAIL. |
+| **DEV-003** | Spec 11.2 keys the StateStore on **account_login + MagicNumber**. The implementation adds the symbol to the key, so PeakEquity / DDState / DailyStartEquity are not shared between the per-symbol instances. | The account-level DD state machine and DailyEntryLock therefore do not behave as specified. Spec 14.2 makes a non-functioning DD Hard Stop or DailyEntryLock an automatic FAIL. |
+
+## B. Open HIGH
+
+| id | issue | note |
+|----|-------|------|
+| ISSUE-003 / CR-003 | The MT5 strategy tester runs exactly one expert, so the portfolio rules of spec 11.4 cannot be produced in a backtest with one instance per symbol. | Held open by instruction. Options (a) single-instance multi-symbol research mode, (b) offline portfolio replay of the EVAL/ENTRY/EXIT logs, (c) forward/live only. The implementation does not choose. |
+| **DEV-004** | Spec 10.2 defines the cost-adjusted BE as the price where P/L after "既発生commission + swap + 推定exit commission" is >= 0, and states that the **spread must not be added** because it is already contained in the Ask/Bid execution relationship. The implementation adds the spread and ignores swap and actual commission history. | Affects ExitMode B only. |
+| **DEV-005** / CR-006R | Spec 16 registers 41 parameters with a provenance class; every H-class parameter requires OAT sensitivity (13.4), and spec 14.1 fails G3 if any registered OAT parameter or test is unreported. The EA exposes three inputs; RESTRICTED ScoreThreshold (16: baseline 6, OAT 5/6/7) and Deviation Hard Cap (9.3 / 16: 1.0/2.0/3.0 pips) are compile-time constants. | The execution method must be decided by G1/G2: EA inputs, or one build per OAT point. 13.4 forbids a brute-force grid, so simply exposing 30 inputs is not automatically correct. |
+| **DEV-006** / CR-015 | Spec 13.5 and the G3 start record define execution stress as a spread **multiplier** (x1.5 / x2.0 / x3.0) plus adverse slippage of 0.25 / 0.50 / 1.00 x observed spread on entry and exit. The EA offers an absolute extra-spread input and no slippage model. | Spec 14.1 requires Expectancy_R > 0 under Stress-1, which cannot currently be evaluated. |
+
+## C. Open MEDIUM
+
+| id | issue |
+|----|-------|
+| **DEV-007** / CR-016 | Spec 12 defines `fakeout_3 / fakeout_6` as "breakout後3/6本以内反転SL等の診断flag" and 7.2 refers to the reversal-SL rate within 3/6 bars after entry. The EA emits `NA_SPEC_UNDEFINED`. The residual ambiguity is whether "反転SL等" covers only an SL fill, and whether the origin is entry or breakout — hence CR-016. Spec 13.6 and the G3 start record require a fakeout subgroup analysis. |
+| **DEV-008** | Spec 9.2 requires a commission estimate to be added to pre-trade risk when available. Not implemented. |
+
+## D. Open LOW
+
+| id | issue |
+|----|-------|
+| DEV-009 | `state_store_status` uses six values; spec 12 names `OK / RECOVERED / UNCERTAIN`. A mapping is needed. |
+| DEV-010 | Spec 9.1 names `sl_raw_distance` and `sl_final_distance`; the log stores prices (distances are derivable). |
+| DEV-011 | Spec 9.2 asks for `SYMBOL_TRADE_TICK_VALUE_PROFIT/LOSS` to be recorded for cross-checking. Not logged. |
+| DEV-012 | Spec 15.4 requires protection against a double daily reset when the server clock moves backwards. The implementation resets on any date change. |
+| DEV-013 | The correlation window uses 61 complete D1 bars to form 60 returns; spec 11.4 says "直近60 complete bars". The implementation is one bar more conservative. |
+| DEV-014 | Appendix A returns before `manage_open_positions()` under STATE_UNCERTAIN; the implementation follows 11.2 and keeps managing open positions while refusing new entries. Which reading governs should be confirmed. |
+| DEV-015 | The skip_reason precedence differs from appendix A (H4 score minimum is evaluated before the breakout gate). The accept/reject outcome is identical; only log attribution differs. |
+| DEV-016 | Log column naming differs from spec 12 (`order_calc_profit_1lot` vs `risk_1lot_calc`, `corr_state` vs `corr_unavailable`, the `f_` prefix on feature flags). |
+| DEV-017 | Spec 11.2 requires manual recovery from STATE_UNCERTAIN but does not give the procedure. The implementation never resumes automatically, which satisfies 14.2. |
+
+---
+
+## E. CLOSED by the authority documents
+
+| old id | old severity | resolution |
+|--------|--------------|------------|
+| ISSUE-001 / CR-001 | BLOCKER | **CLOSED.** All three documents received and read in full. `spec_hash` fixed at `229f2992…7ff965` and verified against the hash table printed in the G3 start record. |
+| ISSUE-002 / CR-004 | HIGH | **CLOSED.** Spec 11.4: "position sideを掛けたsigned correlation >=0.70". The implementation is direction adjusted and therefore **correct**. |
+| ISSUE-004 / CR-005 | MEDIUM | **CLOSED.** Spec 11.1 + 8.1 + appendix A (`threshold = (dd_state == RESTRICTED ? 6 : 5)`) + spec 16, which registers RESTRICTED ScoreThreshold as its own parameter. The implementation is **equivalent within the registered value range**. |
+| ISSUE-005 / CR-002 | MEDIUM | **CLOSED.** A definition exists in spec 12 and 7.2. The non-population is re-filed as DEV-007 and the residual wording ambiguity as CR-016. |
+| ISSUE-006 / CR-006 | MEDIUM | **CLOSED.** Spec 16 supplies the full 41-row registry and 13.5 the stress scenarios. The input-surface gap is re-filed as DEV-005 / DEV-006. |
+| ISSUE-007 / CR-007 | MEDIUM | **CLOSED.** Spec 8.2 / 8.3 say "M5 ATR14[1]" — the implementation is **correct**. Spec 6 requires the same-shift ATR on M15, which the implementation gets wrong: re-filed as DEV-001. |
+| ISSUE-008 / CR-007 | MEDIUM | **CLOSED.** Spec 11.1: `DD = (PeakEquity - CurrentEquity) / PeakEquity`. The implementation is **correct**. |
+| ISSUE-009 / CR-012 | LOW | **CLOSED.** Spec 9.3 carries both clauses verbatim; the literal reading in the implementation is **correct**. |
+| ISSUE-010 / CR-010 | MEDIUM | **CLOSED.** Spec 10.2 defines the cost. The implementation deviates: re-filed as DEV-004. |
+| ISSUE-011 / CR-011 | LOW | **CLOSED.** Spec 8.1: "M15 Setup | 0-2 | 最低点なし". The implementation is **correct**. |
+| ISSUE-014 / CR-007 | MEDIUM | **CLOSED.** Spec 11.4: D1, 60 complete bars, log-return Pearson. The implementation is **correct**; the one-bar window difference is DEV-013. |
+| ISSUE-015 / CR-013 | LOW | **CLOSED.** Spec 11.2 requires manual recovery and 14.2 makes an automatic resume an automatic FAIL. The implementation **complies**; the missing procedure is DEV-017. |
+| ISSUE-017 | LOW | **CLOSED.** Spec 11.4 "Max positions = 3" is a portfolio-level limit; the account-wide reading in the implementation is **correct**. |
+
+## F. New CHANGE REQUESTS
 
 | id | request | blocks |
 |----|---------|--------|
-| CR-001 | Supply Master Specification v0.4, G2 Re-Audit Report v0.4 and the G3 research start record, together with their SHA-256 hashes, so that the implementation can be re-verified line by line and `manifests/spec_hash.txt` can be filled in. | ISSUE-001 |
-| CR-002 | Define `fakeout_3` and `fakeout_6`: the reference level, the window (M5 bars? from entry or from the signal bar?), and whether the value is a flag or a magnitude. | ISSUE-005 |
-| CR-003 | Define how portfolio-level research data is to be produced given that the MT5 strategy tester runs one expert. Options for the authority to choose from: (a) a single-instance multi-symbol research mode where the decision point is the first tick **observed** after a new M5 bar of each symbol (a documented deviation from section 4.1); (b) per-symbol backtests plus an offline portfolio simulator that replays the EVAL/ENTRY/EXIT logs under section 12; (c) restrict G3 portfolio evidence to forward/live runs. The implementation will not choose. | ISSUE-003 |
-| CR-004 | Define "signed correlation": raw Pearson sign, or sign adjusted by the direction of each leg. | ISSUE-002 |
-| CR-005 | Define the interaction between the registered ScoreThreshold input (4/5/6) and the per-state minimum scores of the drawdown table. | ISSUE-004 |
-| CR-006 | Publish the pre-registered OAT parameter list and the safety-stress and execution-stress parameter lists, including admissible values. Until then, no additional input will be added. | ISSUE-006 |
-| CR-007 | Confirm the ATR timeframes and shifts (sections 6, 8, 9, 13), the drawdown definition and peak rule (section 10), and the correlation input series (section 12). | ISSUE-007, ISSUE-008, ISSUE-014 |
-| CR-008 | Define the IS / OOS / Walk-Forward / Final Holdout split for a 61-71 month dataset, or state the minimum dataset length under which G3 may not start. | ISSUE-013 |
-| CR-009 | Supply the primary tick feed, the second independent feed, symbol specifications, initial equity, account currency and data start/end dates. | ISSUE-012 |
-| CR-010 | Enumerate the components of the cost-adjusted break-even. | ISSUE-010 |
-| CR-011 | Confirm that M15 has no minimum score. | ISSUE-011 |
-| CR-012 | Confirm that the deviation `min()` expression in section 13 is redundant and that "do not send above the cap" is the governing rule. | ISSUE-009 |
-| CR-013 | Define the procedure for leaving `STATE_UNCERTAIN` (and whether it requires the same audit trail as a manual HARD_STOP reset). | ISSUE-015 |
-| CR-014 | Nominate a machine with MetaEditor / MQL5 for the section 21 compile gate and record the resulting `.ex5` SHA-256 in `manifests/EA_hash.txt`. | ISSUE-016 |
+| CR-006R | Specify how the spec 16 OAT sensitivity is to be executed for the ~30 H-class parameters: EA inputs, or one build per OAT point. 13.4 forbids a brute-force grid, so the method must be chosen by G1/G2, not by the implementation. | DEV-005 |
+| CR-015 | Specify where the 13.5 execution stress (spread multiplier, adverse slippage) is realised: inside the EA, in tester settings, or in post-processing. | DEV-006 |
+| CR-016 | Give the exact definition of `fakeout_3` / `fakeout_6`: does "反転SL等" mean an SL fill only, is the origin the entry or the breakout bar, and is it a flag or a magnitude. | DEV-007 |
 
-## Rejected by design
-
-The following were considered and deliberately **not** implemented, because
-they are not in the specification:
+## G. Rejected by design (unchanged)
 
 * Any additional entry filter, session filter or news filter.
 * Any result-driven parameter change, symbol selection or threshold tuning.
-* Any optimiser-friendly input surface or search helper.
+* Any optimiser-friendly input surface or search helper beyond what spec 16
+  registers, and only once CR-006R has specified the method.
 * Any Final Holdout access, directory or reference.

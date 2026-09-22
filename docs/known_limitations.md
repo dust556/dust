@@ -3,32 +3,33 @@
 Authority order: Master Specification v0.4 > G2 Re-Audit Report v0.4 >
 G3 research start record > the implementation prompt.
 
-**None of the three authority documents was available in this implementation
-environment** (see `docs/change_requests.md`, ISSUE-001). Everything below is
-stated so that Manus can verify it against the authority documents before any
-G3 number is accepted.
+**Updated 2026-09-22.** The three authority documents have since been received
+and read in full (ISSUE-001 CLOSED). Section A below is no longer a list of
+open assumptions: each one has been checked against the authority text and is
+marked CONFIRMED or REFUTED. A refuted assumption became a conformance
+deviation, recorded in `docs/G4_reconciliation_report.md`.
 
-## A. Assumptions made where the supplied text is silent
+## A. Assumptions, re-adjudicated against Master Specification v0.4
 
 Every assumption is minimal, conservative, and logged in the research CSV so
 that its effect can be measured.
 
-| id | assumption | where | why it was needed |
-|----|------------|-------|-------------------|
-| A-01 | Drawdown is measured against stored peak **equity**: `DD% = (PeakEquity - Equity) / PeakEquity * 100`. | `G3DrawdownPct()` | Section 10 names the thresholds but not the drawdown basis; `PeakEquity` is a mandated StateStore field, which makes peak-equity drawdown the only consistent reading. |
-| A-02 | Median of an even sample = mean of the two central order statistics. | `G3Median()` | `median(ATR14 shifts 2..101)` is a 100 element sample; the tie rule is not stated. |
-| A-03 | The `0.20 x ATR` pullback band uses M15 `ATR14` of spec shift 1. | `M15Input.atr14_s1` | Section 6 says "same shift EMA20" but does not bind the ATR shift. |
-| A-04 | `ATR14[1]` in sections 8, 9 and 13 is the **M5** ATR14 of shift 1. | `MarketFilters`, `RiskManager`, `OrderManager` | These sections operate on the M5 trigger context (M5 highs/lows, spread at the decision tick). |
-| A-05 | Correlation uses D1 **close-to-close log returns**; 60 returns are taken from 61 fully closed D1 bars. | `G3D1Returns()` | Section 12 says "D1 complete bars 60" and "Pearson correlation" without naming the series. |
-| A-06 | Cost adjusted break-even cost = current spread in price, plus the optional commission input converted to price. | `G3BreakevenPrice()`, `MoneyPerLotToPrice()` | Section 14 B says "cost-adjusted BE" without listing the cost components. |
-| A-07 | `SYMBOL_TRADE_STOPS_LEVEL` is measured against Bid for a BUY and Ask for a SELL. | `G3AdjustStopBroker()` | MT5 convention; not restated by the spec. |
-| A-08 | "Same currency component, same direction" means signed per-currency exposure: a long EURUSD is long EUR and short USD. | `G3CurrencyRiskPct()` | Section 12 does not spell out the direction algebra. |
-| A-09 | On store mismatch the conservative merge is: more severe DD state, latch OR, higher PeakEquity, higher DailyStartEquity, later ServerDate, later consumed signal. | `G3MergeConservative()` | Section 10 says "adopt the more conservative state" without a field level rule. |
-| A-10 | RESTRICTED forces `ScoreThreshold = max(6, input)`; the other states use the registered input. | `G3EffectiveScoreThreshold()` | See ISSUE-004. |
-| A-11 | Drawdown state recovery moves one state per evaluation (RESTRICTED -> MODERATE -> NORMAL), each guarded by its own hysteresis level. | `G3NextDDState()` | Section 10 gives two separate recovery rules and no skip rule. |
-| A-12 | Peak equity tracks account **equity**, not balance, and is updated on every evaluation. | `RefreshAccountState()` | Consistent with A-01 and with `RiskMoney = Equity x EffectiveRiskPct`. |
-| A-13 | `DailyStartEquity` is captured on the first processed tick after the broker server date changes. | `RefreshAccountState()` | Section 11 says "at the start of the broker server date". |
-| A-14 | Signal consumption is monotonic per symbol: a signal whose M5 bar time is not newer than the last consumed one is refused. | `G3SignalAlreadyConsumed()` | Fail-closed reading of "duplicate orders are never acceptable". |
+| id | assumption | verdict against the authority text |
+|----|------------|------------------------------------|
+| A-01 | `DD% = (PeakEquity - Equity) / PeakEquity * 100` | **CONFIRMED** — spec 11.1 states this formula verbatim. |
+| A-02 | Median of an even sample = mean of the two central order statistics | **NOT ADDRESSED** by the spec (15.3 only fixes the window as shifts 2..101). Remains a documented convention; no deviation. |
+| A-03 | The 0.20 x ATR pullback band uses the M15 ATR14 of spec shift 1 | **REFUTED** — spec 6 requires "EMA20同shift + 0.20×ATR同shift" and "各Low/Highは同じshiftのEMA20/ATRと比較". Became **DEV-001 (BLOCKER)**. |
+| A-04 | `ATR14[1]` in the volatility, spread, SL and deviation rules is the M5 ATR14 | **CONFIRMED** — spec 8.2 and 8.3 say "M5 ATR14[1]" explicitly. |
+| A-05 | Correlation uses D1 close-to-close log returns | **CONFIRMED** — spec 11.4 says "D1の直近60 complete barsのlog return Pearson correlation". The 61-bar window remains as DEV-013 (LOW, more conservative). |
+| A-06 | Cost adjusted BE cost = current spread + optional commission | **REFUTED** — spec 10.2 defines the cost as 既発生commission + swap + 推定exit commission and states that the spread must **not** be added. Became **DEV-004 (HIGH)**. |
+| A-07 | StopsLevel is measured against Bid for a BUY and Ask for a SELL | **NOT CONTRADICTED** — spec 9.1 leaves the reference price to MT5 convention. |
+| A-08 | Signed per-currency exposure: a long EURUSD is long EUR and short USD | **CONFIRMED** — spec 11.4: "BUY EURUSDはEUR + / USD -として両通貨へ符号付きriskを配賦する". |
+| A-09 | Conservative merge on store mismatch | **CONFIRMED** — spec 11.2: "より保守的なstate（高いPeak、厳しいDD state、HardStop=trueを優先）". |
+| A-10 | RESTRICTED forces `max(6, input)`, other states use the registered input | **CONFIRMED (equivalent)** — appendix A: `threshold = (dd_state == RESTRICTED ? 6 : 5)`; spec 16 registers RESTRICTED ScoreThreshold separately. Within the registered ranges the two are identical. Exposing that parameter is DEV-005. |
+| A-11 | Recovery moves one state per evaluation | **CONFIRMED** — spec 11.1 gives one hysteresis rule per step and no skip rule. |
+| A-12 | Peak tracks equity and is never reset | **CONFIRMED** — spec 11.1 and 11.2 (PeakEquity is a persisted field, "高いPeak"を優先). |
+| A-13 | DailyStartEquity is captured at the server date change | **CONFIRMED** — spec 11.3 and 15.4 (日次境界はBroker server date). The missing double-reset guard of 15.4 is DEV-012. |
+| A-14 | Signal consumption is monotonic per symbol | **CONFIRMED in intent** — spec 4.1 requires fail-closed exactly-once. Note that the per-symbol scope of the store is DEV-003. |
 
 ## B. Limitations of this build
 
@@ -39,9 +40,9 @@ that its effect can be measured.
 | L-03 | One EA instance per symbol. Portfolio state is shared through terminal global variables plus a recomputation fallback. If terminal global variables are wiped while positions are open, exposure is recomputed from the live stops, which can differ slightly from the risk booked at entry. | Logged in `total_risk` / `currency_exposure`; check `state_store_status`. |
 | L-04 | MFE/MAE are updated per tick from the position's close-side price (Bid for BUY, Ask for SELL), not from completed M5 bar extremes. | Excursion resolution depends on tick density of the feed. |
 | L-05 | Currency components are parsed from the first six characters of the symbol name, so broker suffixes (`EURUSD.m`) are handled but exotic naming schemes are not. | Verify symbol naming before a run. |
-| L-06 | Execution stress is limited to additional spread and a commission input. Slippage cannot be injected into the MT5 strategy tester by an EA. | Slippage stress needs a tester-side or feed-side mechanism; see ISSUE-006. |
+| L-06 | Execution stress is an absolute extra-spread input with no slippage model. Spec 13.5 requires a spread multiplier plus adverse slippage. | See DEV-006 / CR-015. |
 | L-07 | `realized_pl` is summed from `HistorySelectByPosition()` including swap and commission; brokers differ in how commission is booked. | Compare against the tester report before accepting money-based statistics. |
-| L-08 | `fakeout_3` / `fakeout_6` are emitted as `NA_SPEC_UNDEFINED` because the specification does not define them. | See CR-002. |
+| L-08 | `fakeout_3` / `fakeout_6` are emitted as `NA_SPEC_UNDEFINED`. The specification **does** define them (12, 7.2); this is now a conformance gap, not a spec gap. | See DEV-007 / CR-016. |
 | L-09 | The MT5 strategy tester runs exactly one expert, so a per-symbol-instance design cannot produce portfolio-level (MaxPositions, total risk, correlation cluster) backtest results in the tester. | **Blocking for portfolio-level G3 runs.** See ISSUE-003 / CR-003. |
 | L-10 | There is no defined procedure for leaving `STATE_UNCERTAIN`; the EA simply refuses new entries. | See ISSUE-015 / CR-013. |
 | L-11 | `G3_MAX_LEGS` is 16 and `G3_MAX_TRACKED` is 16; both exceed the specified MaxPositions of 3 but bound memory. | No effect at the specified limits. |
@@ -56,4 +57,4 @@ that its effect can be measured.
   size increase, no news filter, no external realtime decision source.
 * No backtest result of any kind is reported, because no primary tick feed,
   symbol specification, initial equity, account currency or data range was
-  supplied (section 22).
+  supplied (spec 13.1; the G3 start record records the same gap).

@@ -21,6 +21,17 @@ import sys
 from datetime import datetime, timezone
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+# SHA-256 of the three authority documents, verified against the hash table
+# printed in the G3 research start record (CR-001 CLOSED).
+AUTHORITY = {
+    "master_specification_v0.4":
+        "229f29920ee411cf008442f56a1061583fc564ad50c979c32bf7996ada7ff965",
+    "g2_re_audit_report_v0.4":
+        "7d17353844c88030622638abd10c5b475c7f74eea26936b21c87e8c15d64fbeb",
+    "g3_research_start_record":
+        "d068cdc797a6708629c21df2a085afa6a8a3d46b388f200340e856e1376ab82c",
+}
+
 GROUPS = {
     "source": ("src", (".mq5", ".mqh")),
     "config": ("config", (".set",)),
@@ -68,12 +79,14 @@ def main():
         "groups": {},
         "aggregate": {},
         "ea_hash": "PENDING_METAEDITOR_COMPILE",
-        "spec_hash": "PENDING_SPEC_DOCUMENT",
+        "spec_hash": AUTHORITY["master_specification_v0.4"],
+        "authority_documents": AUTHORITY,
         "notes": [
             "ea_hash is the SHA-256 of the compiled .ex5 and can only be produced "
             "by a MetaEditor build; this repository has no MQL5 toolchain.",
-            "spec_hash is the SHA-256 of the Master Specification v0.4 document, "
-            "which was not supplied to the implementation environment.",
+            "spec_hash is the SHA-256 of the Master Specification v0.4 document. "
+            "The value is confirmed against the hash table printed in the G3 "
+            "research start record.",
             "No Final Holdout data, path or artifact is referenced anywhere.",
         ],
     }
@@ -102,10 +115,12 @@ def main():
         fh.write("SOURCE_HASH=%s\n" % manifest["aggregate"]["source_hash"])
 
     with open(os.path.join(outdir, "spec_hash.txt"), "w", encoding="utf-8") as fh:
-        fh.write("# SHA-256 of Master Specification v0.4 (authority document)\n")
-        fh.write("# The document was not supplied to this environment, so the hash\n")
-        fh.write("# cannot be computed here. See docs/change_requests.md CR-001.\n")
-        fh.write("SPEC_HASH=PENDING_SPEC_DOCUMENT\n")
+        fh.write("# SHA-256 of the three authority documents (CR-001 CLOSED).\n")
+        fh.write("# master_specification_v0.4 and g2_re_audit_report_v0.4 match the\n")
+        fh.write("# hash table printed inside the G3 research start record.\n")
+        fh.write("SPEC_HASH=%s\n" % AUTHORITY["master_specification_v0.4"])
+        for k, v in AUTHORITY.items():
+            fh.write("%s=%s\n" % (k.upper(), v))
 
     with open(os.path.join(outdir, "config_hash.txt"), "w", encoding="utf-8") as fh:
         fh.write("CONFIG_HASH=%s\n" % manifest["aggregate"]["config_hash"])
