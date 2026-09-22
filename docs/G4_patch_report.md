@@ -5,8 +5,8 @@
 | 基準 | `docs/G4_reconciliation_report.md`（コミット `d95a7ae`） |
 | 作業範囲 | **Master Specification v0.4との明白な実装不一致の是正のみ**。仕様変更・利益改善・パラメータ調整なし |
 | 変更前 source_hash | `59b5da9afa41627dbb243090a37883c064266ccd8b5f2b5f59902d48ab295c61` |
-| 変更後 source_hash | `b141c0ffac55bd09a878ec1a759d505ccc56308c7cf8339588bbab0495a3e7db` |
-| 変更後 release_hash | `1f0064e6668d7f965834e346e6e343e2f7f0d18a40c42eaf6142254f6ecf9e0c` |
+| 変更後 source_hash | `50e42c6af071ea65b407680aad45acf86a682784684325ed9a6ddfa2c3462cb1` |
+| 変更後 release_hash | `72158a82e3122ae386d62f36094465943df3303fedf88ee28566f0670b6e51cc` |
 
 ---
 
@@ -111,10 +111,10 @@
 ## 5. ハッシュ再生成
 
 ```
-source_hash  : b141c0ffac55bd09a878ec1a759d505ccc56308c7cf8339588bbab0495a3e7db
+source_hash  : 50e42c6af071ea65b407680aad45acf86a682784684325ed9a6ddfa2c3462cb1
 config_hash  : 37c820c795a23d9c30a11b19d8bd811f0bbd0c255819b86695a1c8dd1d2ebe5e
 schema_hash  : 01c3b3ff4cab5d507cdf8791c789f3803e8ad3dfb2d599e13cf068f8cdefe5e4
-release_hash : 1f0064e6668d7f965834e346e6e343e2f7f0d18a40c42eaf6142254f6ecf9e0c
+release_hash : 72158a82e3122ae386d62f36094465943df3303fedf88ee28566f0670b6e51cc
 spec_hash    : 229f29920ee411cf008442f56a1061583fc564ad50c979c32bf7996ada7ff965
 EA_hash      : PENDING_METAEDITOR_COMPILE
 ```
