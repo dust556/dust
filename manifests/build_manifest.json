@@ -2,7 +2,7 @@
   "artifact": "G3 Research EA",
   "spec_authority": "Master Specification v0.4",
   "ea_version": "0.4.0-research",
-  "generated_utc": "2026-09-22T04:59:08Z",
+  "generated_utc": "2026-09-22T07:03:46Z",
   "groups": {
     "source": {
       "src/ExitManager.mqh": "816db19f8875e90304feef954062b4926011447faf01b06aabe19dfc68c32f40",
