@@ -2,7 +2,7 @@
   "artifact": "G3 Research EA",
   "spec_authority": "Master Specification v0.4",
   "ea_version": "0.4.0-research",
-  "generated_utc": "2026-09-23T01:38:20Z",
+  "generated_utc": "2026-09-23T01:48:46Z",
   "groups": {
     "source": {
       "src/ExitManager.mqh": "93466d9b5e2435d3d396d37ea70ff75db56f705891f3ecc5c6a36a4f7d2808f8",
@@ -63,7 +63,7 @@
     "tools_hash": "b659ad39768f7de4aa9eaec428afa50aeee056b96425ec86947f51b685891539",
     "release_hash": "ea649bdb88e3becbd697d1d08162679f8f7cc1a6d6d940284c14845fb981f4a8"
   },
-  "ea_hash": "PENDING_EX5_NOT_SUPPLIED",
+  "ea_hash": "7a51ce18f7ffc474bc615e688284de0441b6112f04ce8ea5691e3d77f5740a55",
   "metaeditor_compile": {
     "toolchain": "MetaEditor / MQL5",
     "status": "PASS",

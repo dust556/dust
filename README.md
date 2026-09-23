@@ -25,7 +25,8 @@ Final Holdout data.
 * Compile (MetaEditor): **PASS - 0 errors / 0 warnings**, run by the operator
   on 2026-09-23. This environment has no MQL5 toolchain, so the result is
   recorded with its provenance.
-* Compiled `.ex5` hash: **not yet bound** - see `tools/record_ea_hash.py`.
+* Compiled `.ex5` hash: **bound** -
+  `7a51ce18f7ffc474bc615e688284de0441b6112f04ce8ea5691e3d77f5740a55`.
 * Static pre-compile check: **PASS** (0 issues).
 * Host unit tests: **PASS** (207 assertions, 0 failures).
 * Research instrument tests: **PASS** (59 tests, 0 failures).

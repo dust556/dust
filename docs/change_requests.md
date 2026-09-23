@@ -24,7 +24,7 @@ results materially. **MEDIUM** changes results in identifiable cases.
 
 | id | issue | why it is still open |
 |----|-------|----------------------|
-| ISSUE-016 / CR-014 | **Reduced.** The MetaEditor compile gate passed on 2026-09-23 with 0 errors and 0 warnings (operator reported; one metadata-only line, `#property version "0.4" -> "1.000"`, is now in the tree). What remains is binding the compiled `.ex5` SHA-256 as `EA_hash` and running the 35 MT5 integration cases. | `tools/record_ea_hash.py` binds the binary without disturbing any other hash. |
+| ISSUE-016 / CR-014 | **Reduced to the integration run.** The MetaEditor compile gate passed on 2026-09-23 with 0 errors and 0 warnings (operator reported; one metadata-only line, `#property version "0.4" -> "1.000"`, is in the tree), and the compiled `.ex5` is bound as `EA_hash = 7a51ce18…40a55`. What remains is the 35 MT5 integration cases. | See `docs/G4_compile_report.md`. |
 | ISSUE-012 / CR-009 | Primary tick feed, second independent feed, symbol specifications, initial equity, account currency and cost information are not supplied (spec 13.1). | Not received. The G3 start record states the same gap. Held open by instruction. |
 | ISSUE-013 / CR-008 | No fixed data split exists for a 61-71 month dataset. Spec 13.2 defines only the 72 month case and the "60 months only" fallback. | The G3 start record states explicitly: "61〜71か月…の固定分割はv0.4に明示されていない。分割を推測して研究を開始しない。G1への仕様照会又はCRの対象として保留する". Held open by instruction. |
 

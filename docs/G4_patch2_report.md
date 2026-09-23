@@ -159,7 +159,7 @@ release_hash                 : ea649bdb88e3becbd697d1d08162679f8f7cc1a6d6d940284
 spec_hash (v0.4)             : 229f29920ee411cf008442f56a1061583fc564ad50c979c32bf7996ada7ff965
 addendum_hash (v0.4.1a)      : fa107ac25d161253511a69b620ef70dd66677406abb539ad8031de2b680aa40c
 g2_delta_re_audit_v0.4.1a    : 5567a3297a79430d40d5b8d9009044b8b32c059e78bff48c5b2ef74c5e7f7f85
-EA_hash                      : PENDING_EX5_NOT_SUPPLIED
+EA_hash                      : 7a51ce18f7ffc474bc615e688284de0441b6112f04ce8ea5691e3d77f5740a55
 ```
 
 `config/` は未変更のため `config_hash` は Patch-1 と同一です。Patch-2では
@@ -170,7 +170,7 @@ EA_hash                      : PENDING_EX5_NOT_SUPPLIED
 
 | id | 種別 | 内容 |
 |---|---|---|
-| ISSUE-016 / CR-014 | BLOCKER（縮小） | コンパイルは PASS（0/0）。残るのは `.ex5` のSHA-256記録と MT5統合テスト |
+| ISSUE-016 / CR-014 | BLOCKER（縮小） | コンパイル PASS（0/0）、`.ex5` の SHA-256 記録済み。残るのは MT5統合テスト35ケースのみ |
 | ISSUE-012 / CR-009 | BLOCKER | Primary/第2feed、symbol spec、initial equity、account currency、コスト情報 |
 | N-3 | MEDIUM（非ブロッキング） | 実装済み（開示要件）。G3実施要領への反映はManus側 |
 | LOW-4 | LOW（非ブロッキング） | 実装済み（review queue）。サンプル確認手続きはG2 v0.5系 |
