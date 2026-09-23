@@ -115,6 +115,72 @@ class TestCli(unittest.TestCase):
             # Raising the ceiling lets the otherwise-qualifying large company through.
             self.assertEqual(payload["ranking"], ["BIGCAP"])
 
+    def test_backtest_writes_reports_end_to_end(self):
+        fixtures = os.path.join(os.path.dirname(__file__), "..", "data", "fixtures")
+        with tempfile.TemporaryDirectory() as directory:
+            code = main(
+                [
+                    "backtest",
+                    "--provider", "fixtures",
+                    "--fixtures", fixtures,
+                    "--start", "2022-01-01",
+                    "--end", "2026-03-31",
+                    "--benchmark", "BIGCAP",
+                    "--out", directory,
+                    "--quiet",
+                ]
+            )
+            self.assertEqual(code, 0)
+            with open(os.path.join(directory, "backtest.json")) as handle:
+                payload = json.load(handle)
+            self.assertGreater(len(payload["periods"]), 10)
+            self.assertTrue(
+                any("SURVIVORSHIP" in b for b in payload["biases"])
+            )
+
+    def test_backtest_missing_price_policy_reaches_the_runner(self):
+        fixtures = os.path.join(os.path.dirname(__file__), "..", "data", "fixtures")
+        with tempfile.TemporaryDirectory() as directory:
+            main(
+                [
+                    "backtest",
+                    "--provider", "fixtures",
+                    "--fixtures", fixtures,
+                    "--start", "2022-01-01",
+                    "--end", "2026-03-31",
+                    "--benchmark", "BIGCAP",
+                    "--missing-price-policy", "zero",
+                    "--out", directory,
+                    "--quiet",
+                ]
+            )
+            with open(os.path.join(directory, "backtest.json")) as handle:
+                payload = json.load(handle)
+            self.assertEqual(
+                payload["backtest_config"]["missing_price_policy"], "zero"
+            )
+
+    def test_universe_history_must_be_a_date_keyed_object(self):
+        from smallcap.cli import _load_universe_history
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "u.json")
+            with open(path, "w") as handle:
+                json.dump(["IDEAL"], handle)
+            with self.assertRaises(ValueError):
+                _load_universe_history(path)
+
+            with open(path, "w") as handle:
+                json.dump({"not-a-date": ["IDEAL"]}, handle)
+            with self.assertRaises(ValueError):
+                _load_universe_history(path)
+
+            with open(path, "w") as handle:
+                json.dump({"2022-01-01": ["ideal", "noskin"]}, handle)
+            self.assertEqual(
+                _load_universe_history(path), {"2022-01-01": ["IDEAL", "NOSKIN"]}
+            )
+
     def test_malformed_as_of_is_rejected(self):
         code = main(["screen", "--provider", "fixtures", "--as-of", "not-a-date",
                      "--tickers", "IDEAL", "--quiet"])

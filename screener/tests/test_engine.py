@@ -86,9 +86,15 @@ class TestGoldenVerdicts(unittest.TestCase):
         self.assertEqual(undecided, {"gross_margin", "returns", "leverage", "insider"})
         self.assertAlmostEqual(result.data_quality, 0.2)
 
-    def test_only_the_ideal_company_is_ranked(self):
+    def test_acquired_company_also_clears_the_screen(self):
+        # DELISTED is a sound business whose price series stops part-way; it
+        # must pass the screen, because the delisting is a *price* fact and
+        # the screen only looks at fundamentals.
+        self.assertTrue(self.results["DELISTED"].all_passed)
+
+    def test_exactly_the_intended_companies_are_ranked(self):
         ranked = self.engine.rank(list(self.results.values()))
-        self.assertEqual([r.ticker for r in ranked], ["IDEAL"])
+        self.assertEqual(sorted(r.ticker for r in ranked), ["DELISTED", "IDEAL"])
 
 
 class TestEngineRobustness(unittest.TestCase):
@@ -221,7 +227,7 @@ class TestScoring(unittest.TestCase):
         results = screen.screen(screen.provider.universe())
         stats = summarise(results)
         self.assertEqual(stats["universe_size"], len(results))
-        self.assertEqual(stats["passed_all"], 1)
+        self.assertEqual(stats["passed_all"], 2)
         self.assertGreaterEqual(stats["failures_by_criterion"]["gross_margin"], 2)
 
 
@@ -234,8 +240,8 @@ class TestReporting(unittest.TestCase):
 
     def test_json_is_parseable_and_carries_the_summary(self):
         payload = json.loads(to_json(self.results, ranked=self.ranked))
-        self.assertEqual(payload["summary"]["passed_all"], 1)
-        self.assertEqual(payload["ranking"], ["IDEAL"])
+        self.assertEqual(payload["summary"]["passed_all"], 2)
+        self.assertEqual(sorted(payload["ranking"]), ["DELISTED", "IDEAL"])
         self.assertEqual(len(payload["results"]), len(self.results))
 
     def test_json_serialises_dates_and_enums(self):

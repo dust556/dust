@@ -28,6 +28,7 @@ from ..models import (
     InsiderOwnership,
     MarketData,
     PricePoint,
+    SharesPoint,
 )
 from .base import ProviderError
 
@@ -57,8 +58,15 @@ def _company_from_dict(raw: Dict[str, Any]) -> CompanyFinancials:
             for p in raw_market.get("history", [])
             if p.get("date") is not None
         ]
+        shares_history = [
+            SharesPoint(date=_date(s["date"]), shares=float(s["shares"]))
+            for s in raw_market.get("shares_history", [])
+            if s.get("date") is not None
+        ]
+        shares_history.sort(key=lambda s: s.date)
         market = MarketData(
             ticker=raw_market.get("ticker", raw.get("ticker", "")),
+            shares_history=shares_history,
             price=raw_market.get("price"),
             price_date=_date(raw_market.get("price_date")),
             shares_outstanding=raw_market.get("shares_outstanding"),
@@ -155,12 +163,71 @@ class FixtureProvider:
 
 
 def _filter_as_of(company: CompanyFinancials, as_of: dt.date) -> CompanyFinancials:
-    """Drop anything that was not public at ``as_of``.
+    """Return a copy of ``company`` holding only what was public at ``as_of``.
 
-    Fixtures get the same point-in-time treatment as live data; otherwise a
-    test would pass on look-ahead data that the live path would reject.
+    Two things this must get right, both of which are silent if wrong:
+
+    * **The price is rewound too.** Rewinding the filings but leaving today's
+      price in place would screen history against a market cap nobody could
+      have computed at the time -- look-ahead on the one number you actually
+      trade on.
+    * **Nothing shared is mutated.** The cached company object is reused for
+      every as-of date in a backtest, so trimming its lists in place would let
+      an early rebalance date corrupt every later one.
     """
-    clone = CompanyFinancials(
+    market = None
+    if company.market is not None:
+        source = company.market
+        history = [p for p in source.history if p.date <= as_of]
+        price, price_date = source.price, source.price_date
+        if history:
+            # The last close on or before the as-of date.
+            price, price_date = history[-1].close, history[-1].date
+        elif price_date is not None and price_date > as_of:
+            # No history to fall back on and the stored quote post-dates the
+            # as-of date: report no price rather than a future one.
+            price, price_date = None, None
+        shares, shares_date = source.shares_outstanding, source.shares_date
+        history_shares = [s for s in source.shares_history if s.date <= as_of]
+        if history_shares:
+            shares, shares_date = history_shares[-1].shares, history_shares[-1].date
+        elif shares_date is not None and shares_date > as_of:
+            shares, shares_date = None, None
+        market = MarketData(
+            ticker=source.ticker,
+            price=price,
+            price_date=price_date,
+            shares_outstanding=shares,
+            shares_date=shares_date if shares is not None else None,
+            market_cap=(price * shares) if (price is not None and shares is not None) else None,
+            history=history,
+            shares_history=history_shares,
+            beta=source.beta,
+            currency=source.currency,
+        )
+
+    insiders = None
+    if company.insiders is not None:
+        source_insiders = company.insiders
+        holdings = [
+            h
+            for h in source_insiders.holdings
+            if h.as_of is None or h.as_of <= as_of
+        ]
+        total = (
+            sum(h.shares or 0.0 for h in holdings) if holdings else None
+        )
+        insiders = InsiderOwnership(
+            total_shares=total,
+            holdings=holdings,
+            basis=source_insiders.basis,
+            as_of=max(
+                (h.as_of for h in holdings if h.as_of), default=None
+            ),
+            notes=list(source_insiders.notes),
+        )
+
+    return CompanyFinancials(
         ticker=company.ticker,
         cik=company.cik,
         name=company.name,
@@ -172,11 +239,8 @@ def _filter_as_of(company: CompanyFinancials, as_of: dt.date) -> CompanyFinancia
             for p in company.periods
             if p.end <= as_of and (p.filed is None or p.filed <= as_of)
         ],
-        market=company.market,
-        insiders=company.insiders,
+        market=market,
+        insiders=insiders,
         warnings=list(company.warnings),
         source=company.source,
     )
-    if clone.market and clone.market.history:
-        clone.market.history = [p for p in clone.market.history if p.date <= as_of]
-    return clone

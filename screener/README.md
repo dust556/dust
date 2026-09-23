@@ -34,6 +34,12 @@ smallcap screen --universe-file universe.txt --workers 4 --out out/
 
 # 1銘柄の全計算過程を表示
 smallcap explain ACME
+
+# バックテスト (スクリーンを過去に遡って実行し、成績を測定)
+smallcap backtest --universe-file universe.txt \
+  --start 2015-01-01 --end 2025-12-31 \
+  --benchmark IWM --factors F-F_Research_Data_Factors.CSV \
+  --ablation --out bt/
 ```
 
 出力は `out/` に3種類:
@@ -43,6 +49,32 @@ smallcap explain ACME
 | `results.json` | 全中間計算値 + 実行時の設定 (再現用) |
 | `results.csv` | 表計算ソフト用の1行1銘柄サマリ |
 | `report.md` | 判定理由を文章で記述したレポート |
+
+## バックテスト
+
+「この5条件は機能するのか」に数字で答えるための基盤。詳細は
+[`docs/backtest.md`](docs/backtest.md)。
+
+- 四半期リバランス（提出書類の更新頻度に合わせた既定値）
+- **報告ラグ**: 期末から75日後にリバランス。12月期末の10-Kを1月1日に
+  読めることにするのが、バックテストが取引不可能になる最も一般的な経路
+- **ルックアヘッド遮断**: 提出書類も株価も株式数も `as_of` 時点まで巻き戻される
+- **ファクター調整**: 小型株スクリーンがベンチマークを上回るのは設計上当然なので、
+  Mkt-RF / SMB / HML への回帰で「そのエクスポージャーの対価を払った後に残るもの」
+  を測る
+- **アブレーション**: 5条件を1つずつ外して、どれが実際に効いているかを見る
+
+出力レポートは**バイアス欄を成績の前に置く**。サバイバーシップバイアス、
+コスト未計上、サンプル数の警告を読む前にCAGRを見て結論を出すのが、
+バックテストの最も一般的な誤用であるため。
+
+```sh
+# 上場廃止銘柄を含む正しいユニバースを与える (サバイバーシップバイアスの唯一の解)
+smallcap backtest --universe-history universe_by_date.json ...
+
+# 上場廃止銘柄を全損と仮定した悲観的な下限を確認する
+smallcap backtest --missing-price-policy zero ...
+```
 
 ## 主要オプション
 
@@ -101,6 +133,13 @@ src/smallcap/
 ├── report.py            JSON / CSV / Markdown 出力
 ├── cli.py               コマンドライン
 ├── criteria/            5条件 (1ファイル1条件)
+├── backtest/
+│   ├── calendar.py      リバランス日と報告ラグ
+│   ├── portfolio.py     組入・ウェイト・欠損株価の扱い
+│   ├── performance.py   CAGR/Sharpe/最大DD、多変量OLS
+│   ├── factors.py       Fama-French ファクター読み込み
+│   ├── runner.py        バックテストループとアブレーション
+│   └── report.py        バイアスを先頭に置くレポート
 ├── providers/
 │   ├── sec_edgar.py     XBRL companyfacts + Form 3/4/5 解析
 │   ├── prices.py        株価・ベータ推定
@@ -111,7 +150,7 @@ src/smallcap/
 ## テスト
 
 ```sh
-./run_tests.sh          # 143件、外部依存・ネットワーク不要
+./run_tests.sh          # 222件、外部依存・ネットワーク不要
 ```
 
 フィクスチャは各条件の分岐を1つずつ検証するよう作られている
@@ -130,6 +169,11 @@ src/smallcap/
    販管費への科目移動だけで粗利率は上昇する。
 3. **条件①はカバレッジの薄さを検証していない。** 時価総額のみを見ている。
    アナリストカバレッジ数は無料データソースに存在しない。
+
+バックテストについては [`docs/backtest.md`](docs/backtest.md) に、除去できない
+バイアス（サバイバーシップ、コスト未計上、上場廃止銘柄の決済価格、サンプルサイズ）
+を記述している。**実データでの検証はまだ行われていない。** 同梱フィクスチャは
+機構の動作確認用であり、5条件が超過リターンを生むという証拠ではない。
 
 本エンジンはリサーチ用の測定器であり、投資助言ではない。5条件を満たすことは
 **調査を始める理由**であって、調査の結論ではない。

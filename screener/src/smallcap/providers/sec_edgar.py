@@ -31,6 +31,7 @@ from ..models import (
     InsiderHolding,
     InsiderOwnership,
     MarketData,
+    SharesPoint,
 )
 from ..util.http import HttpClient, HTTPError
 from .base import ProviderError
@@ -183,6 +184,7 @@ class SECEdgarProvider:
             ticker=company.ticker,
             shares_outstanding=shares,
             shares_date=shares_date,
+            shares_history=self._shares_history(facts, as_of),
         )
         if shares is None:
             company.warnings.append("share count unavailable")
@@ -378,6 +380,37 @@ class SECEdgarProvider:
             if best_value is not None:
                 return best_value, best_end
         return None, None
+
+    def _shares_history(
+        self, facts: Dict[str, Any], as_of: Optional[dt.date]
+    ) -> List[SharesPoint]:
+        """Every reported cover-page share count, oldest first.
+
+        Retained so a historical market cap can use the count that was on
+        file at the time rather than the newest one.
+        """
+        all_facts = facts.get("facts") or {}
+        by_date: Dict[dt.date, float] = {}
+        for namespace, concept in SHARE_CONCEPTS:
+            entries = (
+                ((all_facts.get(namespace) or {}).get(concept) or {}).get("units") or {}
+            ).get("shares")
+            if not entries:
+                continue
+            for entry in entries:
+                end = _parse_date(entry.get("end"))
+                filed = _parse_date(entry.get("filed"))
+                value = entry.get("val")
+                if end is None or value is None:
+                    continue
+                if as_of is not None and (filed is None or filed > as_of):
+                    continue
+                by_date.setdefault(end, float(value))
+            if by_date:
+                # Stop at the first concept that yielded anything, so a
+                # fallback tag cannot interleave with the preferred one.
+                break
+        return [SharesPoint(date=d, shares=v) for d, v in sorted(by_date.items())]
 
     # ------------------------------------------------------------------
     # Insider ownership (Forms 3/4/5)

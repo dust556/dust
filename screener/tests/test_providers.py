@@ -365,6 +365,51 @@ class TestFixtureProvider(unittest.TestCase):
         self.assertLess(len(trimmed.periods), len(full.periods))
         self.assertTrue(all(p.filed <= dt.date(2023, 1, 1) for p in trimmed.periods))
 
+    def test_as_of_rewinds_the_price_not_just_the_filings(self):
+        """Look-ahead on price would invalidate every backtest number."""
+        provider = FixtureProvider(self.directory)
+        early = provider.fetch("IDEAL", as_of=dt.date(2021, 6, 30))
+        late = provider.fetch("IDEAL", as_of=dt.date(2026, 3, 31))
+        self.assertIsNotNone(early.market.price)
+        self.assertLess(early.market.price, late.market.price)
+        self.assertLessEqual(early.market.price_date, dt.date(2021, 6, 30))
+
+    def test_as_of_uses_the_share_count_on_file_at_the_time(self):
+        provider = FixtureProvider(self.directory)
+        early = provider.fetch("IDEAL", as_of=dt.date(2021, 6, 30))
+        late = provider.fetch("IDEAL", as_of=dt.date(2026, 3, 31))
+        # IDEAL buys stock back, so the historical count is the higher one.
+        self.assertGreater(
+            early.market.shares_outstanding, late.market.shares_outstanding
+        )
+        self.assertAlmostEqual(
+            early.market.market_cap,
+            early.market.price * early.market.shares_outstanding,
+        )
+
+    def test_repeated_fetches_do_not_corrupt_each_other(self):
+        """A backtest fetches the same company at many dates, in any order."""
+        provider = FixtureProvider(self.directory)
+        first = len(provider.fetch("IDEAL", as_of=dt.date(2021, 6, 30)).market.history)
+        provider.fetch("IDEAL", as_of=dt.date(2026, 3, 31))
+        again = len(provider.fetch("IDEAL", as_of=dt.date(2021, 6, 30)).market.history)
+        self.assertEqual(first, again)
+        # The unfiltered company must still be intact afterwards.
+        self.assertGreater(len(provider.fetch("IDEAL").market.history), first)
+
+    def test_as_of_drops_insider_holdings_reported_later(self):
+        provider = FixtureProvider(self.directory)
+        before = provider.fetch("IDEAL", as_of=dt.date(2019, 1, 1))
+        self.assertIsNone(before.insiders.total_shares)
+
+    def test_sec_share_history_is_ordered_and_respects_as_of(self):
+        provider = SECEdgarProvider(Config(), http=FakeHttp({}))
+        history = provider._shares_history(COMPANY_FACTS, as_of=None)
+        self.assertEqual([p.shares for p in history], [40_000_000, 41_000_000])
+        self.assertEqual([p.date for p in history], sorted(p.date for p in history))
+        trimmed = provider._shares_history(COMPANY_FACTS, as_of=dt.date(2025, 6, 30))
+        self.assertEqual([p.shares for p in trimmed], [40_000_000])
+
     def test_round_trips_a_written_snapshot(self):
         with tempfile.TemporaryDirectory() as directory:
             payload = {

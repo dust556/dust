@@ -112,6 +112,19 @@ class PricePoint:
 
 
 @dataclass
+class SharesPoint:
+    """A share count as reported on a given filing's cover page.
+
+    Kept as a series rather than a single latest figure so a historical
+    market cap uses the count that was on file at the time. Buybacks and
+    secondary offerings move this enough to matter for a band test.
+    """
+
+    date: dt.date
+    shares: float
+
+
+@dataclass
 class MarketData:
     ticker: str
     price: Optional[float] = None
@@ -121,6 +134,8 @@ class MarketData:
     market_cap: Optional[float] = None
     # Trailing history, used for the beta estimate feeding WACC.
     history: List[PricePoint] = field(default_factory=list)
+    # Reported share counts over time, newest last.
+    shares_history: List[SharesPoint] = field(default_factory=list)
     beta: Optional[float] = None
     currency: str = "USD"
 

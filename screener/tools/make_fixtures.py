@@ -44,6 +44,8 @@ def build_company(
     tax_rate: float = 0.21,
     working_capital_ratio: float = 0.12,
     acquisitions_ratio: float = 0.0,
+    price_drift: float = 0.0035,
+    buyback: float = 0.0,
     exchange: str = "Nasdaq",
     quarters: bool = True,
     note: str = "",
@@ -116,7 +118,7 @@ def build_company(
     if quarters:
         periods.extend(_synthesise_quarters(periods[-1], periods[-2]))
 
-    history = _price_history(price)
+    history = _price_history(price, drift=price_drift)
 
     company = {
         "ticker": ticker,
@@ -133,6 +135,7 @@ def build_company(
             "shares_date": dt.date(2026, 2, 20).isoformat(),
             "beta": 1.1,
             "history": history,
+            "shares_history": _shares_history(shares, buyback=buyback),
         },
         "insiders": {
             "basis": "form345",
@@ -199,18 +202,43 @@ def _synthesise_quarters(latest: Dict, prior: Dict) -> List[Dict]:
     return quarters
 
 
-def _price_history(price: float) -> List[Dict]:
-    """Two years of weekly closes on a gentle upward drift."""
+def _price_history(price: float, drift: float = 0.0035) -> List[Dict]:
+    """Weekly closes from 2020 to the as-of date, ending near ``price``.
+
+    The series is generated backwards from the target price so the final
+    close matches the company's stated price, and deterministically (no RNG)
+    so regenerating the fixtures never changes a committed number.
+    """
+    weeks = 330  # ~2020-01 through 2026-03
+    start = dt.date(2020, 1, 3)
     history = []
-    start = dt.date(2024, 4, 5)
-    level = price * 0.75
-    for week in range(104):
+    for week in range(weeks):
         date = start + dt.timedelta(weeks=week)
-        # Deterministic pseudo-noise: no RNG, so fixtures are byte-stable.
+        # Deterministic pseudo-noise, bounded to +/-2%.
         wobble = 1.0 + 0.02 * ((week * 7919) % 11 - 5) / 5.0
-        level *= 1.0 + 0.0035
+        level = price * ((1.0 + drift) ** (week - (weeks - 1)))
         history.append({"date": date.isoformat(), "close": round(level * wobble, 4)})
     return history
+
+
+def _shares_history(shares: float, buyback: float = 0.0) -> List[Dict]:
+    """One cover-page share count per fiscal year.
+
+    Without this, a historical market cap would have to reuse the latest
+    share count, which is look-ahead on the denominator of condition 1.
+    """
+    points = []
+    for offset in range(YEARS):
+        year = BASE_YEAR + offset
+        # Count shrinks going back if the company has been buying stock in.
+        factor = (1.0 + buyback) ** (YEARS - 1 - offset)
+        points.append(
+            {
+                "date": dt.date(year, 12, 31).isoformat(),
+                "shares": round(shares * factor, 0),
+            }
+        )
+    return points
 
 
 def _insider_holdings(shares: float, fraction: float) -> List[Dict]:
@@ -233,7 +261,10 @@ def _insider_holdings(shares: float, fraction: float) -> List[Dict]:
                 "is_officer": officer,
                 "is_director": director,
                 "shares": round(total * weight, 0),
-                "as_of": dt.date(2026, 2, 1).isoformat(),
+                # Dated at the start of the history: insiders who have not
+                # traded since keep the same reported holding, which is how
+                # Form 4 reconstruction behaves in reality.
+                "as_of": dt.date(BASE_YEAR, 3, 1).isoformat(),
             }
         )
     return holdings
@@ -247,6 +278,8 @@ FIXTURES = [
     # above WACC with heavy reinvestment, 1.4x leverage, 18% insider-held.
     dict(
         ticker="IDEAL",
+        price_drift=0.0042,
+        buyback=0.01,
         name="Ideal Compounder Inc.",
         revenue_start=300e6,
         revenue_growth=0.14,
@@ -265,6 +298,8 @@ FIXTURES = [
     # Same economics, but a $12bn market cap: condition 1 fails.
     dict(
         ticker="BIGCAP",
+        price_drift=0.0026,
+        buyback=0.005,
         name="Well Covered Industries",
         revenue_start=2.4e9,
         revenue_growth=0.14,
@@ -284,6 +319,8 @@ FIXTURES = [
     # A 26% margin: condition 2 fails on level.
     dict(
         ticker="THINMRG",
+        price_drift=0.0012,
+        buyback=0.0,
         name="Commodity Fabricators Corp.",
         revenue_start=800e6,
         revenue_growth=0.12,
@@ -302,6 +339,8 @@ FIXTURES = [
     # A 48% margin eroding 1.5 points a year: condition 2 fails on direction.
     dict(
         ticker="FADING",
+        price_drift=-0.0008,
+        buyback=0.0,
         name="Eroding Moat Software",
         revenue_start=420e6,
         revenue_growth=0.16,
@@ -323,6 +362,8 @@ FIXTURES = [
     # capital, so the same business compounds more slowly per dollar in it.
     dict(
         ticker="LEVERED",
+        price_drift=0.0005,
+        buyback=-0.02,
         name="Roll-Up Holdings",
         revenue_start=500e6,
         revenue_growth=0.12,
@@ -342,6 +383,8 @@ FIXTURES = [
     # Professionally managed, 1.2% insider-held: condition 5 fails.
     dict(
         ticker="NOSKIN",
+        price_drift=0.0031,
+        buyback=0.0,
         name="Agency Problem Corp.",
         revenue_start=350e6,
         revenue_growth=0.14,
@@ -361,6 +404,8 @@ FIXTURES = [
     # reinvested: condition 3 fails.
     dict(
         ticker="LOWROIC",
+        price_drift=-0.0015,
+        buyback=0.0,
         name="Capital Destroyer Ltd.",
         revenue_start=260e6,
         revenue_growth=0.01,
@@ -377,6 +422,26 @@ FIXTURES = [
         insider_fraction=0.15,
     ),
 ]
+
+
+def _truncate_prices(company: Dict, last_date: dt.date) -> Dict:
+    """Cut a company's price series off, simulating a delisting.
+
+    Without one of these, a backtest never exercises the missing-exit-price
+    path -- which is exactly the path that decides whether a backtest is
+    honest, because delistings skew toward failure.
+    """
+    market = company["market"]
+    market["history"] = [
+        p for p in market["history"] if dt.date.fromisoformat(p["date"]) <= last_date
+    ]
+    if market["history"]:
+        market["price"] = market["history"][-1]["close"]
+        market["price_date"] = market["history"][-1]["date"]
+    company["warnings"] = company.get("warnings", []) + [
+        f"price series ends {last_date.isoformat()} (delisted or acquired)"
+    ]
+    return company
 
 
 def main() -> None:
@@ -422,6 +487,36 @@ def main() -> None:
     path = os.path.join(out_dir, "THINDATA.json")
     with open(path, "w", encoding="utf-8") as handle:
         json.dump(thin, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+    print(f"wrote {os.path.relpath(path)}")
+
+    # A company that clears the screen and then stops trading part-way
+    # through the backtest window.
+    delisted = _truncate_prices(
+        build_company(
+            ticker="DELISTED",
+            name="Taken Private Corp.",
+            price_drift=0.0038,
+            buyback=0.0,
+            revenue_start=320e6,
+            revenue_growth=0.13,
+            margin_start=0.48,
+            margin_step=0.011,
+            opex_ratio=0.30,
+            da_ratio=0.035,
+            capex_ratio=0.080,
+            equity_start=250e6,
+            debt=85e6,
+            cash=40e6,
+            price=28.0,
+            shares=45e6,
+            insider_fraction=0.17,
+        ),
+        dt.date(2024, 9, 30),
+    )
+    path = os.path.join(out_dir, "DELISTED.json")
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(delisted, handle, indent=2, sort_keys=True)
         handle.write("\n")
     print(f"wrote {os.path.relpath(path)}")
 

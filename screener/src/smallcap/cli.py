@@ -213,6 +213,89 @@ def cmd_explain(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_backtest(args: argparse.Namespace) -> int:
+    from .backtest import Backtester, BacktestConfig, load_factors
+    from .backtest import report as backtest_report
+
+    config = build_config(args)
+    provider = build_provider(args, config)
+    if args.provider not in ("fixtures", "fixture"):
+        _check_user_agent(config)
+
+    backtest = BacktestConfig(
+        start=dt.date.fromisoformat(args.start),
+        end=dt.date.fromisoformat(args.end),
+        frequency=args.frequency,
+        reporting_lag_days=args.reporting_lag,
+        max_holdings=args.max_holdings,
+        weighting=args.weighting,
+        missing_price_policy=args.missing_price_policy,
+        benchmark=args.benchmark,
+        factors=args.factors,
+        universe_history=_load_universe_history(args.universe_history),
+    )
+
+    factor_data = None
+    if args.factors:
+        factor_data = load_factors(args.factors)
+
+    tickers = read_tickers(args)
+    if not tickers and hasattr(provider, "universe"):
+        tickers = provider.universe()
+    if not tickers:
+        raise SystemExit("no tickers to backtest: pass --tickers or --universe-file")
+    if args.limit:
+        tickers = tickers[: args.limit]
+
+    tester = Backtester(provider, config, backtest)
+
+    def progress(done: int, total: int, period) -> None:
+        if args.quiet:
+            return
+        print(
+            f"[{done:>4}/{total}] {period.rebalance_date} "
+            f"{len(period.positions)} holdings",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    periods = tester.run(tickers, progress=progress)
+    result = tester.analyse(periods, factor_data=factor_data)
+
+    if args.ablation:
+        if not args.quiet:
+            print("running per-condition ablation...", file=sys.stderr)
+        result.ablation = tester.ablation(tickers, factor_data=factor_data)
+
+    if args.out:
+        paths = backtest_report.write_reports(args.out, result)
+        for kind, path in paths.items():
+            print(f"wrote {kind}: {path}", file=sys.stderr)
+    print(backtest_report.format_console(result))
+    return 0
+
+
+def _load_universe_history(path: Optional[str]) -> Optional[dict]:
+    """Load a point-in-time universe: {"YYYY-MM-DD": [tickers]}.
+
+    This is what removes survivorship bias, so a malformed file is an error
+    rather than a silent fall back to today's listings.
+    """
+    if not path:
+        return None
+    with open(path, "r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    if not isinstance(payload, dict) or not payload:
+        raise ValueError(
+            f"{path}: expected a non-empty object mapping ISO dates to ticker lists"
+        )
+    for key, value in payload.items():
+        dt.date.fromisoformat(key)
+        if not isinstance(value, list):
+            raise ValueError(f"{path}: value for {key} is not a list of tickers")
+    return {k: [str(t).upper() for t in v] for k, v in payload.items()}
+
+
 def cmd_universe(args: argparse.Namespace) -> int:
     config = build_config(args)
     _check_user_agent(config)
@@ -328,6 +411,63 @@ def build_parser() -> argparse.ArgumentParser:
     explain.add_argument("ticker")
     explain.add_argument("--json", action="store_true", help="emit JSON")
     explain.set_defaults(func=cmd_explain)
+
+    backtest = subparsers.add_parser(
+        "backtest",
+        help="run the screen through history and measure what it produced",
+    )
+    _add_common(backtest)
+    backtest.add_argument("--start", required=True, help="ISO start date")
+    backtest.add_argument("--end", required=True, help="ISO end date")
+    backtest.add_argument(
+        "--frequency",
+        default="quarterly",
+        choices=["monthly", "quarterly", "semiannual", "annual"],
+        help="rebalance frequency (default: quarterly, matching filing cadence)",
+    )
+    backtest.add_argument(
+        "--reporting-lag",
+        type=int,
+        default=75,
+        help="days after period end before a filing is assumed public (default: 75)",
+    )
+    backtest.add_argument("--tickers", help="comma-separated tickers")
+    backtest.add_argument("--universe-file", help="file with one ticker per line")
+    backtest.add_argument(
+        "--universe-history",
+        help="JSON {date: [tickers]} of point-in-time listings; "
+        "the only way to remove survivorship bias",
+    )
+    backtest.add_argument("--limit", type=int, help="use at most N tickers")
+    backtest.add_argument("--benchmark", default="SPY", help="benchmark ticker")
+    backtest.add_argument(
+        "--max-holdings", type=int, help="cap the portfolio at N names"
+    )
+    backtest.add_argument(
+        "--weighting",
+        default="equal",
+        choices=["equal", "score"],
+        help="position weighting (default: equal)",
+    )
+    backtest.add_argument(
+        "--missing-price-policy",
+        default="drop",
+        choices=["drop", "zero", "flat"],
+        help="how to settle a position with no exit price; 'drop' flatters "
+        "the result if the gaps are delistings, 'zero' is the pessimistic bound",
+    )
+    backtest.add_argument(
+        "--factors",
+        help="Fama-French factor CSV (Ken French data library), for alpha",
+    )
+    backtest.add_argument(
+        "--ablation",
+        action="store_true",
+        help="also re-run with each condition removed in turn",
+    )
+    backtest.add_argument("--out", help="output directory for the reports")
+    backtest.add_argument("--quiet", action="store_true", help="suppress progress")
+    backtest.set_defaults(func=cmd_backtest)
 
     universe = subparsers.add_parser(
         "universe", help="list the screenable ticker universe"
