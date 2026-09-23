@@ -436,3 +436,135 @@ class TestFixtureProvider(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestFetchSeries(unittest.TestCase):
+    """Parsing once must produce exactly what parsing per date produced."""
+
+    def setUp(self):
+        self.directory = os.path.join(
+            os.path.dirname(__file__), "..", "data", "fixtures"
+        )
+        self.dates = [
+            dt.date(2022, 3, 16),
+            dt.date(2023, 6, 14),
+            dt.date(2024, 9, 13),
+            dt.date(2026, 3, 16),
+        ]
+
+    def _snapshot(self, company):
+        """The fields any criterion could read."""
+        market = company.market
+        return (
+            len(company.periods),
+            sorted(p.end for p in company.periods),
+            None if market is None else (market.price, market.price_date,
+                                         market.shares_outstanding, market.market_cap),
+            None if company.insiders is None else company.insiders.total_shares,
+        )
+
+    def test_fixture_series_matches_per_date_fetch(self):
+        provider = FixtureProvider(self.directory)
+        series = provider.fetch_series("IDEAL", self.dates)
+        for date in self.dates:
+            self.assertEqual(
+                self._snapshot(series[date]),
+                self._snapshot(provider.fetch("IDEAL", as_of=date)),
+                f"mismatch at {date}",
+            )
+
+    def test_sec_series_matches_per_date_fetch(self):
+        http = FakeHttp({"companyfacts": COMPANY_FACTS})
+        provider = SECEdgarProvider(Config(), http=http)
+        provider._ticker_index = {
+            "TEST": {"cik": "0000000123", "name": "Test Co", "exchange": "Nasdaq"}
+        }
+        dates = [dt.date(2025, 6, 30), dt.date(2026, 6, 30), dt.date(2027, 6, 30)]
+        series = provider.fetch_series("TEST", dates)
+        for date in dates:
+            expected = provider.fetch("TEST", as_of=date)
+            self.assertEqual(
+                [(p.end, p.revenue, p.gross_profit) for p in series[date].periods],
+                [(p.end, p.revenue, p.gross_profit) for p in expected.periods],
+                f"mismatch at {date}",
+            )
+
+    def test_sec_series_reads_each_document_once(self):
+        http = FakeHttp({"companyfacts": COMPANY_FACTS})
+        provider = SECEdgarProvider(Config(), http=http)
+        provider._ticker_index = {
+            "TEST": {"cik": "0000000123", "name": "Test Co", "exchange": "Nasdaq"}
+        }
+        dates = [dt.date(2025, 6, 30), dt.date(2026, 6, 30), dt.date(2027, 6, 30)]
+        provider.fetch_series("TEST", dates)
+        facts_requests = [u for u in http.requested if "companyfacts" in u]
+        self.assertEqual(len(facts_requests), 1)
+
+    def test_generic_helper_falls_back_for_providers_without_the_fast_path(self):
+        from smallcap.providers.base import fetch_series as generic
+
+        class SlowOnly:
+            def __init__(self, inner):
+                self.inner = inner
+                self.calls = 0
+
+            def fetch(self, ticker, as_of=None):
+                self.calls += 1
+                return self.inner.fetch(ticker, as_of=as_of)
+
+        provider = SlowOnly(FixtureProvider(self.directory))
+        series = generic(provider, "IDEAL", self.dates)
+        self.assertEqual(sorted(series), sorted(self.dates))
+        self.assertEqual(provider.calls, len(self.dates))
+
+    def test_ownership_aggregation_is_point_in_time_from_shared_rows(self):
+        submissions = {
+            "filings": {
+                "recent": {
+                    "form": ["4", "4"],
+                    "accessionNumber": ["0000000123-26-000002", "0000000123-26-000001"],
+                    "primaryDocument": ["late.xml", "early.xml"],
+                    "reportDate": ["2026-02-01", "2024-02-01"],
+                    "filingDate": ["2026-02-03", "2024-02-03"],
+                }
+            }
+        }
+        early = FORM4_XML.replace("2026-02-01", "2024-02-01").replace(
+            "5000000", "1000000"
+        )
+        provider = SECEdgarProvider(
+            Config(),
+            http=FakeHttp(
+                {"submissions": submissions, "late.xml": FORM4_XML, "early.xml": early}
+            ),
+        )
+        rows = provider._collect_ownership_rows("0000000123")
+        # One parse of each filing, then a different answer per as-of date.
+        at_2025 = provider._aggregate_ownership(rows, dt.date(2025, 1, 1))
+        at_2026 = provider._aggregate_ownership(rows, dt.date(2026, 6, 1))
+        self.assertEqual(at_2025.total_shares, 1_000_000.0 + 1_200_000.0)
+        self.assertEqual(at_2026.total_shares, 5_000_000.0 + 1_200_000.0)
+
+    def test_collect_respects_the_filing_cap(self):
+        forms = ["4"] * 10
+        submissions = {
+            "filings": {
+                "recent": {
+                    "form": forms,
+                    "accessionNumber": [f"0000000123-26-{i:06d}" for i in range(10)],
+                    "primaryDocument": [f"f{i}.xml" for i in range(10)],
+                    "reportDate": ["2026-02-01"] * 10,
+                    "filingDate": ["2026-02-03"] * 10,
+                }
+            }
+        }
+        payloads = {"submissions": submissions}
+        payloads.update({f"f{i}.xml": FORM4_XML for i in range(10)})
+        config = Config()
+        config.insider.max_filings = 3
+        provider = SECEdgarProvider(config, http=FakeHttp(payloads))
+        rows = provider._collect_ownership_rows("0000000123")
+        fetched = [u for u in provider.http.requested if u.endswith(".xml")]
+        self.assertEqual(len(fetched), 3)
+        ownership = provider._aggregate_ownership(rows, dt.date(2026, 3, 1))
+        self.assertTrue(any("stopped after 3" in n for n in ownership.notes))

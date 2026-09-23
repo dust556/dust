@@ -115,6 +115,11 @@ class InsiderConfig:
     # Ownership computed from Form 3/4/5 is a lower bound (see docs). This
     # flag keeps that caveat attached to every result derived that way.
     warn_on_form345_basis: bool = True
+    # How many ownership filings to read per company, newest first. Each one
+    # is a separate HTTP request, so this is the single biggest driver of a
+    # full-universe run's duration. Raise it for long backtests, where the
+    # oldest rebalance dates need filings from further back.
+    max_filings: int = 120
 
 
 @dataclass

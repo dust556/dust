@@ -63,13 +63,21 @@ smallcap backtest --universe-file universe.txt \
   Mkt-RF / SMB / HML への回帰で「そのエクスポージャーの対価を払った後に残るもの」
   を測る
 - **アブレーション**: 5条件を1つずつ外して、どれが実際に効いているかを見る
+- **サバイバーシップバイアス対策**: `universe-history` がEDGARのfull-indexから
+  各時点の上場企業リストを復元する。CIK→ティッカーに変換できない企業
+  （＝上場廃止組）の割合を**残存バイアスの推定値として数値報告する**
 
 出力レポートは**バイアス欄を成績の前に置く**。サバイバーシップバイアス、
 コスト未計上、サンプル数の警告を読む前にCAGRを見て結論を出すのが、
 バックテストの最も一般的な誤用であるため。
 
 ```sh
-# 上場廃止銘柄を含む正しいユニバースを与える (サバイバーシップバイアスの唯一の解)
+# 各時点の上場企業リストをEDGARのfull-indexから生成する
+# (後に倒産・上場廃止した企業も含まれる)
+smallcap universe-history --start 2015-01-01 --end 2025-12-31 \
+  --out universe_by_date.json --coverage-out coverage.json
+
+# それを与えてバックテストする
 smallcap backtest --universe-history universe_by_date.json ...
 
 # 上場廃止銘柄を全損と仮定した悲観的な下限を確認する
@@ -133,6 +141,7 @@ src/smallcap/
 ├── report.py            JSON / CSV / Markdown 出力
 ├── cli.py               コマンドライン
 ├── criteria/            5条件 (1ファイル1条件)
+├── universe.py          EDGAR full-indexからの時点別ユニバース構築
 ├── backtest/
 │   ├── calendar.py      リバランス日と報告ラグ
 │   ├── portfolio.py     組入・ウェイト・欠損株価の扱い
@@ -150,7 +159,7 @@ src/smallcap/
 ## テスト
 
 ```sh
-./run_tests.sh          # 222件、外部依存・ネットワーク不要
+./run_tests.sh          # 256件、外部依存・ネットワーク不要
 ```
 
 フィクスチャは各条件の分岐を1つずつ検証するよう作られている

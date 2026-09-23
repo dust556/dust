@@ -20,13 +20,17 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Sequence
 
 from ..config import Config
 from ..criteria import ALL_CRITERIA, CRITERION_KEYS
 from ..engine import ScreeningEngine
-from ..models import PricePoint
+from ..models import PricePoint, ScreenResult
+from ..providers.base import ProviderError
+from ..providers.base import fetch_series as provider_fetch_series
+from ..util.http import HTTPError
 from .calendar import FREQUENCIES, rebalance_dates
 from .factors import DEFAULT_FACTORS, FactorData, RISK_FREE_COLUMN
 from .performance import (
@@ -141,13 +145,15 @@ class Backtester:
         periods: List[Period] = []
         previous_weights: Optional[Dict[str, float]] = None
 
+        entry_dates = dates[:-1]
+        results_by_date = self._screen_all_dates(tickers, entry_dates, criteria)
+
         # The final date opens no position: there is nothing after it to
         # settle against, so it is the last exit rather than an entry.
         for index, (entry_date, exit_date) in enumerate(zip(dates, dates[1:]), start=1):
             period_config = _config_at(self.config, entry_date)
             engine = ScreeningEngine(self.provider, period_config, criteria=criteria)
-            candidates = self.universe_at(entry_date, tickers)
-            results = engine.screen(candidates)
+            results = results_by_date.get(entry_date, [])
             ranked = engine.rank(results)
 
             period = build_period(
@@ -182,6 +188,77 @@ class Backtester:
                 progress(index, len(dates) - 1, period)
 
         return periods
+
+    # ------------------------------------------------------------------
+    def _screen_all_dates(
+        self,
+        tickers: Sequence[str],
+        entry_dates: Sequence[dt.date],
+        criteria: Optional[Sequence] = None,
+    ) -> Dict[dt.date, List[ScreenResult]]:
+        """Screen every company at every rebalance date, company by company.
+
+        The obvious loop is date-outer: for each rebalance date, screen the
+        universe. It is also the wrong one. Every company would be fetched
+        and re-parsed once per date, and for SEC EDGAR that means
+        decompressing and parsing a multi-megabyte companyfacts document --
+        plus every Form 4 XML -- forty times over for a ten-year quarterly
+        run. Inverting the loop reads each company once and replays the
+        cheap point-in-time assembly across all the dates, which is what
+        makes a full-universe backtest finish at all.
+        """
+        engines = {
+            date: ScreeningEngine(
+                self.provider, _config_at(self.config, date), criteria=criteria
+            )
+            for date in entry_dates
+        }
+        # Which dates each ticker is investable on, so a point-in-time
+        # universe still excludes it from the dates it was not listed.
+        dates_for: Dict[str, List[dt.date]] = {}
+        for date in entry_dates:
+            for ticker in self.universe_at(date, tickers):
+                dates_for.setdefault(ticker.upper(), []).append(date)
+
+        results: Dict[dt.date, List[ScreenResult]] = {d: [] for d in entry_dates}
+
+        def screen_one(ticker: str) -> List[tuple]:
+            wanted = dates_for[ticker]
+            try:
+                series = provider_fetch_series(self.provider, ticker, wanted)
+            except (ProviderError, HTTPError) as exc:
+                LOGGER.warning("could not fetch %s: %s", ticker, exc)
+                return [
+                    (d, ScreenResult(ticker=ticker, error=str(exc), as_of=d.isoformat()))
+                    for d in wanted
+                ]
+            except Exception as exc:  # noqa: BLE001
+                LOGGER.exception("provider failed for %s", ticker)
+                return [
+                    (
+                        d,
+                        ScreenResult(
+                            ticker=ticker,
+                            error=f"{type(exc).__name__}: {exc}",
+                            as_of=d.isoformat(),
+                        ),
+                    )
+                    for d in wanted
+                ]
+            return [(d, engines[d].evaluate(series[d])) for d in wanted if d in series]
+
+        workers = max(1, int(self.config.workers))
+        ordered = sorted(dates_for)
+        if workers == 1 or len(ordered) <= 1:
+            for ticker in ordered:
+                for date, result in screen_one(ticker):
+                    results[date].append(result)
+        else:
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                for pairs in pool.map(screen_one, ordered):
+                    for date, result in pairs:
+                        results[date].append(result)
+        return results
 
     # ------------------------------------------------------------------
     def analyse(

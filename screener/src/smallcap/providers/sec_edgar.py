@@ -19,10 +19,13 @@ day, which is what makes a historical run mean anything.
 from __future__ import annotations
 
 import datetime as dt
+import logging
 import re
 import threading
 import xml.etree.ElementTree as ET
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+
+from dataclasses import dataclass, field
 
 from ..config import Config
 from ..models import (
@@ -41,6 +44,8 @@ from .concepts import (
     SHARE_CONCEPTS,
 )
 
+LOGGER = logging.getLogger("smallcap.providers.sec_edgar")
+
 TICKER_INDEX_URL = "https://www.sec.gov/files/company_tickers_exchange.json"
 COMPANY_FACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
 SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik}.json"
@@ -50,6 +55,17 @@ ARCHIVE_URL = "https://www.sec.gov/Archives/edgar/data/{cik_int}/{accession}/{do
 # excluded by default: the coverage argument in the brief is about
 # under-followed *listed* companies, not about unlisted paper.
 DEFAULT_EXCHANGES = {"NYSE", "Nasdaq", "NYSE American", "NYSEAmerican", "CBOE"}
+
+
+@dataclass
+class RawCompany:
+    """Everything fetched for one company, before any as-of filtering."""
+
+    ticker: str
+    meta: Dict[str, Any]
+    facts: Dict[str, Any]
+    ownership_rows: List[Dict[str, Any]] = field(default_factory=list)
+    ownership_error: Optional[str] = None
 
 
 def _parse_date(value: Optional[str]) -> Optional[dt.date]:
@@ -160,20 +176,73 @@ class SECEdgarProvider:
     def fetch(
         self, ticker: str, as_of: Optional[dt.date] = None
     ) -> CompanyFinancials:
+        return self._assemble(self._load_raw(ticker), as_of)
+
+    def fetch_series(
+        self, ticker: str, as_of_dates: Sequence[dt.date]
+    ) -> Dict[dt.date, CompanyFinancials]:
+        """Evaluate one company at many as-of dates, parsing it once.
+
+        A backtest asks for the same company at every rebalance date. Going
+        through :meth:`fetch` each time re-decompresses and re-parses a
+        companyfacts document that is routinely several megabytes, and
+        re-parses every Form 4 XML, once per date -- for a ten-year quarterly
+        run that is forty times the work, and at full-universe scale it
+        dominates the whole job. Here the documents are read once and only
+        the (cheap) point-in-time assembly repeats.
+        """
+        raw = self._load_raw(ticker)
+        return {as_of: self._assemble(raw, as_of) for as_of in as_of_dates}
+
+    # ------------------------------------------------------------------
+    def _load_raw(self, ticker: str) -> "RawCompany":
+        """Fetch and parse every document this company needs, once.
+
+        Deliberately not memoised across calls: the parsed facts of a large
+        filer run to tens of megabytes, and the workers in a parallel run
+        each hold a different company.
+        """
         meta = self.resolve(ticker)
         cik = meta["cik"]
-        company = CompanyFinancials(
-            ticker=ticker.upper(),
-            cik=cik,
-            name=meta.get("name"),
-            exchange=meta.get("exchange"),
-            source=self.name,
-        )
-
         try:
             facts = self.http.get_json(COMPANY_FACTS_URL.format(cik=cik))
         except HTTPError as exc:
             raise ProviderError(f"{ticker}: company facts unavailable ({exc})") from exc
+
+        ownership_rows: List[Dict[str, Any]] = []
+        ownership_error: Optional[str] = None
+        try:
+            ownership_rows = self._collect_ownership_rows(cik)
+        except (HTTPError, ProviderError) as exc:
+            ownership_error = str(exc)
+        except Exception as exc:  # noqa: BLE001
+            # A malformed or unexpected submissions payload costs the insider
+            # criterion, not the company: the other four are still decidable
+            # and the result says why the fifth is not.
+            LOGGER.warning("ownership collection failed for CIK %s: %s", cik, exc)
+            ownership_error = f"{type(exc).__name__}: {exc}"
+
+        return RawCompany(
+            ticker=ticker.upper(),
+            meta=meta,
+            facts=facts,
+            ownership_rows=ownership_rows,
+            ownership_error=ownership_error,
+        )
+
+    def _assemble(
+        self, raw: "RawCompany", as_of: Optional[dt.date]
+    ) -> CompanyFinancials:
+        """Build the point-in-time view of an already-parsed company."""
+        meta = raw.meta
+        facts = raw.facts
+        company = CompanyFinancials(
+            ticker=raw.ticker,
+            cik=meta["cik"],
+            name=meta.get("name"),
+            exchange=meta.get("exchange"),
+            source=self.name,
+        )
 
         company.periods = self._build_periods(facts, as_of)
         if not company.periods:
@@ -206,11 +275,13 @@ class SECEdgarProvider:
         if company.market.price is not None and shares is not None:
             company.market.market_cap = company.market.price * shares
 
-        try:
-            company.insiders = self.fetch_insider_ownership(cik, shares, as_of)
-        except (HTTPError, ProviderError) as exc:
+        if raw.ownership_error:
             # Missing ownership data costs one criterion, not the company.
-            company.warnings.append(f"insider ownership unavailable: {exc}")
+            company.warnings.append(
+                f"insider ownership unavailable: {raw.ownership_error}"
+            )
+        else:
+            company.insiders = self._aggregate_ownership(raw.ownership_rows, as_of)
 
         return company
 
@@ -418,9 +489,9 @@ class SECEdgarProvider:
     def fetch_insider_ownership(
         self,
         cik: str,
-        shares_outstanding: Optional[float],
+        shares_outstanding: Optional[float] = None,
         as_of: Optional[dt.date] = None,
-        max_filings: int = 120,
+        max_filings: Optional[int] = None,
     ) -> InsiderOwnership:
         """Reconstruct insider holdings from ownership filings.
 
@@ -435,7 +506,29 @@ class SECEdgarProvider:
         unexercised derivatives are all outside it. The authoritative figure is
         the beneficial-ownership table in the DEF 14A proxy; see
         ``docs/methodology.md``.
+
+        Fetching and aggregation are separable (:meth:`_collect_ownership_rows`
+        and :meth:`_aggregate_ownership`) so a backtest can parse the filings
+        once and aggregate them at every rebalance date.
         """
+        rows = self._collect_ownership_rows(cik, max_filings=max_filings)
+        return self._aggregate_ownership(rows, as_of)
+
+    # ------------------------------------------------------------------
+    def _collect_ownership_rows(
+        self, cik: str, max_filings: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """Parse every ownership filing once, newest first.
+
+        No as-of filtering happens here -- each row carries its filing and
+        report dates so :meth:`_aggregate_ownership` can apply any cut-off
+        without re-reading a single document.
+        """
+        limit = (
+            max_filings
+            if max_filings is not None
+            else self.config.insider.max_filings
+        )
         submissions = self.http.get_json(SUBMISSIONS_URL.format(cik=cik))
         recent = (submissions.get("filings") or {}).get("recent") or {}
         forms = recent.get("form") or []
@@ -444,31 +537,22 @@ class SECEdgarProvider:
         report_dates = recent.get("reportDate") or []
         filing_dates = recent.get("filingDate") or []
 
-        cutoff = None
-        if as_of is not None:
-            cutoff = as_of - dt.timedelta(days=self.config.insider.max_holding_age_days)
-
-        # (owner_cik, direct/indirect, nature) -> latest reported holding
-        latest: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
-        notes: List[str] = []
+        rows: List[Dict[str, Any]] = []
         examined = 0
+        truncated = False
 
         for i, form in enumerate(forms):
             if form not in ("3", "4", "5", "3/A", "4/A", "5/A"):
                 continue
-            filed = _parse_date(filing_dates[i] if i < len(filing_dates) else None)
-            if as_of is not None and (filed is None or filed > as_of):
-                continue
-            reported = _parse_date(report_dates[i] if i < len(report_dates) else None) or filed
-            if cutoff is not None and reported is not None and reported < cutoff:
-                continue
-            if examined >= max_filings:
-                notes.append(
-                    f"stopped after {max_filings} ownership filings; older holdings ignored"
-                )
+            if examined >= limit:
+                truncated = True
                 break
             examined += 1
 
+            filed = _parse_date(filing_dates[i] if i < len(filing_dates) else None)
+            reported = (
+                _parse_date(report_dates[i] if i < len(report_dates) else None) or filed
+            )
             accession = str(accessions[i]).replace("-", "")
             document = documents[i] if i < len(documents) else ""
             if not document:
@@ -481,18 +565,63 @@ class SECEdgarProvider:
             except HTTPError:
                 continue
             try:
-                rows = parse_ownership_document(raw)
+                parsed = parse_ownership_document(raw)
             except ET.ParseError:
                 continue
-            for row in rows:
+            for row in parsed:
                 row["as_of"] = row.get("as_of") or reported
+                row["reported"] = reported
+                row["filed"] = filed
                 row["accession"] = accessions[i]
-                key = (row["owner_cik"] or row["owner_name"], row["ownership"], row["nature"])
-                previous = latest.get(key)
-                if previous is None or _row_is_newer(row, previous):
-                    latest[key] = row
+                row["truncated"] = truncated
+                rows.append(row)
 
-        holdings: List[InsiderHolding] = []
+        if truncated and rows:
+            rows[0]["truncated_at"] = limit
+        elif truncated:
+            rows.append({"truncated_at": limit, "placeholder": True})
+        return rows
+
+    # ------------------------------------------------------------------
+    def _aggregate_ownership(
+        self, rows: Sequence[Dict[str, Any]], as_of: Optional[dt.date] = None
+    ) -> InsiderOwnership:
+        """Aggregate pre-parsed ownership rows as at ``as_of``."""
+        notes: List[str] = []
+        cutoff = None
+        if as_of is not None:
+            cutoff = as_of - dt.timedelta(days=self.config.insider.max_holding_age_days)
+
+        truncated_at = next(
+            (r["truncated_at"] for r in rows if r.get("truncated_at")), None
+        )
+        if truncated_at:
+            notes.append(
+                f"stopped after {truncated_at} ownership filings; older holdings ignored"
+            )
+
+        # (owner, direct/indirect, nature) -> latest reported holding
+        latest: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
+        considered = 0
+        for row in rows:
+            if row.get("placeholder"):
+                continue
+            filed = row.get("filed")
+            if as_of is not None and (filed is None or filed > as_of):
+                continue
+            reported = row.get("reported")
+            if cutoff is not None and reported is not None and reported < cutoff:
+                continue
+            considered += 1
+            key = (
+                row["owner_cik"] or row["owner_name"],
+                row["ownership"],
+                row["nature"],
+            )
+            previous = latest.get(key)
+            if previous is None or _row_is_newer(row, previous):
+                latest[key] = row
+
         include_ten_pct = self.config.insider.include_ten_percent_owners
         by_owner: Dict[str, InsiderHolding] = {}
         for row in latest.values():
@@ -518,13 +647,13 @@ class SECEdgarProvider:
             holding.shares = (holding.shares or 0.0) + (row["shares"] or 0.0)
             if row["as_of"] and (holding.as_of is None or row["as_of"] > holding.as_of):
                 holding.as_of = row["as_of"]
+
         holdings = sorted(
             by_owner.values(), key=lambda h: h.shares or 0.0, reverse=True
         )
-
         total = sum(h.shares or 0.0 for h in holdings) if holdings else None
         as_of_dates = [h.as_of for h in holdings if h.as_of]
-        if examined == 0:
+        if considered == 0:
             notes.append("no ownership filings found in the window")
         if self.config.insider.warn_on_form345_basis:
             notes.append(

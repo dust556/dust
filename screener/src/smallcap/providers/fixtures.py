@@ -158,6 +158,19 @@ class FixtureProvider:
             return company
         return _filter_as_of(company, as_of)
 
+    def fetch_series(
+        self, ticker: str, as_of_dates
+    ) -> Dict[dt.date, CompanyFinancials]:
+        """Point-in-time views at many dates, loading the fixture once."""
+        companies = self._load()
+        company = companies.get(ticker.upper())
+        if company is None:
+            raise ProviderError(f"{ticker}: no fixture in {self.directory}")
+        return {
+            as_of: (company if as_of is None else _filter_as_of(company, as_of))
+            for as_of in as_of_dates
+        }
+
     def universe(self) -> List[str]:
         return sorted(self._load().keys())
 

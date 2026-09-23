@@ -321,6 +321,74 @@ def cmd_universe(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_universe_history(args: argparse.Namespace) -> int:
+    """Build point-in-time universes from EDGAR's full index."""
+    from .universe import (
+        UniverseBuilder,
+        coverage_report,
+        to_universe_history,
+    )
+    from .backtest.calendar import rebalance_dates
+
+    config = build_config(args)
+    _check_user_agent(config)
+    provider = build_provider(args, config)
+    if not isinstance(provider, SECEdgarProvider):
+        raise SystemExit("universe-history requires --provider sec")
+
+    dates = rebalance_dates(
+        dt.date.fromisoformat(args.start),
+        dt.date.fromisoformat(args.end),
+        args.frequency,
+        args.reporting_lag,
+    )
+    if not dates:
+        raise SystemExit("no rebalance dates in that window")
+
+    builder = UniverseBuilder(
+        http=provider.http,
+        ticker_index=provider.ticker_index(),
+        lookback_months=args.lookback_months,
+    )
+
+    def progress(done, total, snapshot):
+        if args.quiet:
+            return
+        print(
+            f"[{done:>3}/{total}] {snapshot.date}: {len(snapshot.ciks)} filers, "
+            f"{len(snapshot.tickers)} investable",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    snapshots = builder.build(dates, progress=progress)
+    coverage = coverage_report(snapshots)
+
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as handle:
+            json.dump(to_universe_history(snapshots), handle, indent=2, sort_keys=True)
+            handle.write("\n")
+        print(f"wrote universe history: {args.out}", file=sys.stderr)
+    if args.coverage_out:
+        with open(args.coverage_out, "w", encoding="utf-8") as handle:
+            json.dump(coverage, handle, indent=2)
+            handle.write("\n")
+        print(f"wrote coverage report: {args.coverage_out}", file=sys.stderr)
+
+    mean = coverage["mean_coverage"]
+    worst = coverage["worst_coverage"]
+    if mean is not None:
+        print(
+            f"\nticker coverage: mean {mean * 100:.1f}%, worst {worst * 100:.1f}%"
+        )
+        print(
+            f"about {(1 - mean) * 100:.1f}% of historical filers have no ticker "
+            "today (delisted, failed or acquired) and remain outside any "
+            "backtest run on this universe."
+        )
+    return 0
+
+
 def cmd_dump_fixture(args: argparse.Namespace) -> int:
     """Record a live fetch as a fixture, so a run can be replayed offline."""
     config = build_config(args)
@@ -478,6 +546,35 @@ def build_parser() -> argparse.ArgumentParser:
     )
     universe.add_argument("--out", help="write the tickers to this file")
     universe.set_defaults(func=cmd_universe)
+
+    universe_history = subparsers.add_parser(
+        "universe-history",
+        help="build point-in-time universes from EDGAR's full index "
+        "(reduces survivorship bias, and measures what is left)",
+    )
+    _add_common(universe_history)
+    universe_history.add_argument("--start", required=True, help="ISO start date")
+    universe_history.add_argument("--end", required=True, help="ISO end date")
+    universe_history.add_argument(
+        "--frequency",
+        default="quarterly",
+        choices=["monthly", "quarterly", "semiannual", "annual"],
+        help="must match the backtest's rebalance frequency",
+    )
+    universe_history.add_argument("--reporting-lag", type=int, default=75)
+    universe_history.add_argument(
+        "--lookback-months",
+        type=int,
+        default=15,
+        help="a company counts as active if it filed an annual report within "
+        "this many months (default: 15, allowing for late filers)",
+    )
+    universe_history.add_argument("--out", help="write the universe history JSON here")
+    universe_history.add_argument(
+        "--coverage-out", help="write the survivorship coverage report here"
+    )
+    universe_history.add_argument("--quiet", action="store_true")
+    universe_history.set_defaults(func=cmd_universe_history)
 
     dump = subparsers.add_parser(
         "dump-fixture", help="record a live fetch as a replayable fixture"
