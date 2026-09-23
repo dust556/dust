@@ -5,6 +5,7 @@
 | 基準 | G4 Patch-1 Frozen Candidate（`f40086c` / source_hash `50e42c6a…62cb1`） |
 | 権威 | ① Master Spec v0.4 ② v0.4.1a Addendum ③ G2 Delta Re-Audit v0.4.1a ④ Patch-1 repo |
 | G2判定 | **BLOCKER 0 / HIGH 0 / MEDIUM 1 (N-3) / LOW 1 (LOW-4) / PASS**、HIGH-1・HIGH-2ともCLOSED |
+| コンパイル | 2026-09-23 metadata-only fix（`#property version "0.4" -> "1.000"`）を取り込み、MetaEditor compile PASS 0/0 |
 | 作業範囲 | Addendum A〜G の7項目のみ。alpha条件・ScoreThreshold既定値・DD band・RiskPct・Universe・Exit A/B/C既定ロジック・Final Holdout規則・G2承認済み数値ゲートは**一切変更なし** |
 
 入力3点のSHA-256を検証しました。アップロードされたPatch-1 ZIPは
@@ -143,7 +144,7 @@ alpha条件、ScoreThreshold既定値（5）、DD band（6/8/10%、復帰5/7%）
 |---|---|
 | 静的チェック | **0 issues** |
 | host build（`-Wall -Wextra -Wpedantic -Werror`） | **warning 0 / error 0** |
-| MetaEditor compile | **NOT_RUN** — 本環境にMQL5ツールチェーンなし。PASSとは報告しません |
+| MetaEditor compile | **PASS — 0 errors / 0 warnings**（operator実施・2026-09-23報告）。本環境にMQL5ツールチェーンが無いため、私が検証した結果ではなく出所つきで記録しています |
 | MT5統合テスト | **NOT_RUN** |
 | Final Holdout | 未導入・未参照・未計算・未可視化 |
 
@@ -151,14 +152,14 @@ alpha条件、ScoreThreshold既定値（5）、DD band（6/8/10%、復帰5/7%）
 
 ```
 Patch-1 baseline source_hash : 50e42c6af071ea65b407680aad45acf86a682784684325ed9a6ddfa2c3462cb1
-Patch-2 source_hash          : 6faa0ea1cffceb67ded95736de2315401aacf3d7ec6158ed7fc151e7028d6ee6
+Patch-2 source_hash          : fa748067870f2952e9d9a8cceaf801fa4c374a211c04b6a143c4eab9e525597f
 config_hash                  : 37c820c795a23d9c30a11b19d8bd811f0bbd0c255819b86695a1c8dd1d2ebe5e
 schema_hash                  : ea3f1e17364f26c73d5e1686db76d0eaec61bdfedf7f3151aa26bac3ac20a332
-release_hash                 : 61ddcf9eede0e7b0a4403e57bc347544ada7a798c953916eefa6ceea28f33eb0
+release_hash                 : ea649bdb88e3becbd697d1d08162679f8f7cc1a6d6d940284c14845fb981f4a8
 spec_hash (v0.4)             : 229f29920ee411cf008442f56a1061583fc564ad50c979c32bf7996ada7ff965
 addendum_hash (v0.4.1a)      : fa107ac25d161253511a69b620ef70dd66677406abb539ad8031de2b680aa40c
 g2_delta_re_audit_v0.4.1a    : 5567a3297a79430d40d5b8d9009044b8b32c059e78bff48c5b2ef74c5e7f7f85
-EA_hash                      : PENDING_METAEDITOR_COMPILE
+EA_hash                      : PENDING_EX5_NOT_SUPPLIED
 ```
 
 `config/` は未変更のため `config_hash` は Patch-1 と同一です。Patch-2では
@@ -169,7 +170,7 @@ EA_hash                      : PENDING_METAEDITOR_COMPILE
 
 | id | 種別 | 内容 |
 |---|---|---|
-| ISSUE-016 / CR-014 | BLOCKER | MetaEditor実コンパイル・統合テスト（環境外） |
+| ISSUE-016 / CR-014 | BLOCKER（縮小） | コンパイルは PASS（0/0）。残るのは `.ex5` のSHA-256記録と MT5統合テスト |
 | ISSUE-012 / CR-009 | BLOCKER | Primary/第2feed、symbol spec、initial equity、account currency、コスト情報 |
 | N-3 | MEDIUM（非ブロッキング） | 実装済み（開示要件）。G3実施要領への反映はManus側 |
 | LOW-4 | LOW（非ブロッキング） | 実装済み（review queue）。サンプル確認手続きはG2 v0.5系 |

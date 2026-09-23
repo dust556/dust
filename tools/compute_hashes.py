@@ -38,6 +38,44 @@ AUTHORITY = {
         "5567a3297a79430d40d5b8d9009044b8b32c059e78bff48c5b2ef74c5e7f7f85",
 }
 
+# MetaEditor compile, as reported by the operator who ran it. This
+# environment has no MQL5 toolchain, so the result is recorded with its
+# provenance rather than claimed as locally verified.
+COMPILE = {
+    "toolchain": "MetaEditor / MQL5",
+    "status": "PASS",
+    "errors": 0,
+    "warnings": 0,
+    "reported_by": "operator",
+    "reported_on": "2026-09-23",
+    "verified_in_this_environment": False,
+    "source_change_for_compile": (
+        '#property version "0.4" -> "1.000" in src/G3_ResearchEA.mq5; '
+        "metadata only, no strategy logic, parameter, risk or Addendum "
+        "behaviour is affected"
+    ),
+}
+
+# Filled in by tools/record_ea_hash.py once the compiled binary (or its
+# SHA-256) is supplied. Never guessed.
+EA_HASH_FILE = "manifests/ea_hash.value"
+EA_HASH_PENDING = "PENDING_EX5_NOT_SUPPLIED"
+
+
+def read_recorded_ea_hash(root):
+    path = os.path.join(root, EA_HASH_FILE)
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if line.startswith("EA_HASH="):
+                value = line.split("=", 1)[1].strip()
+                if len(value) == 64 and all(c in "0123456789abcdef" for c in value.lower()):
+                    return value.lower()
+    return None
+
+
 GROUPS = {
     "source": ("src", (".mq5", ".mqh")),
     "config": ("config", (".set",)),
@@ -84,13 +122,17 @@ def main():
         "generated_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "groups": {},
         "aggregate": {},
-        "ea_hash": "PENDING_METAEDITOR_COMPILE",
+        "ea_hash": read_recorded_ea_hash(ROOT) or EA_HASH_PENDING,
+        "metaeditor_compile": dict(COMPILE),
         "spec_hash": AUTHORITY["master_specification_v0.4"],
         "addendum_hash": AUTHORITY["master_spec_v0.4.1a_addendum"],
         "authority_documents": AUTHORITY,
         "notes": [
-            "ea_hash is the SHA-256 of the compiled .ex5 and can only be produced "
-            "by a MetaEditor build; this repository has no MQL5 toolchain.",
+            "ea_hash is the SHA-256 of the compiled G3_ResearchEA.ex5. The "
+            "MetaEditor compile itself passed with 0 errors and 0 warnings as "
+            "reported by the operator, but the binary was not supplied to this "
+            "environment, so the hash is recorded only once "
+            "tools/record_ea_hash.py has been given the file or its digest.",
             "spec_hash is the SHA-256 of the Master Specification v0.4 document. "
             "The value is confirmed against the hash table printed in the G3 "
             "research start record.",
@@ -113,13 +155,22 @@ def main():
         json.dump(manifest, fh, indent=2)
         fh.write("\n")
 
+    ea_hash = manifest["ea_hash"]
     with open(os.path.join(outdir, "EA_hash.txt"), "w", encoding="utf-8") as fh:
         fh.write("# SHA-256 of the compiled G3_ResearchEA.ex5\n")
-        fh.write("# Cannot be produced here: MetaEditor / MQL5 is not available in\n")
-        fh.write("# this environment. Fill this in from the machine that compiles the EA:\n")
-        fh.write("#   sha256sum G3_ResearchEA.ex5\n")
-        fh.write("EA_HASH=PENDING_METAEDITOR_COMPILE\n")
+        fh.write("# MetaEditor compile: %s, %d errors, %d warnings (reported by %s on %s).\n"
+                 % (COMPILE["status"], COMPILE["errors"], COMPILE["warnings"],
+                    COMPILE["reported_by"], COMPILE["reported_on"]))
+        if ea_hash == EA_HASH_PENDING:
+            fh.write("# The .ex5 itself has not been supplied to this environment, so the\n")
+            fh.write("# digest below is still a placeholder. Bind it with:\n")
+            fh.write("#   python3 tools/record_ea_hash.py /path/to/G3_ResearchEA.ex5\n")
+            fh.write("#   python3 tools/record_ea_hash.py <sha256>\n")
+        fh.write("EA_HASH=%s\n" % ea_hash)
         fh.write("SOURCE_HASH=%s\n" % manifest["aggregate"]["source_hash"])
+        fh.write("COMPILE_STATUS=%s\n" % COMPILE["status"])
+        fh.write("COMPILE_ERRORS=%d\n" % COMPILE["errors"])
+        fh.write("COMPILE_WARNINGS=%d\n" % COMPILE["warnings"])
 
     with open(os.path.join(outdir, "spec_hash.txt"), "w", encoding="utf-8") as fh:
         fh.write("# SHA-256 of the three authority documents (CR-001 CLOSED).\n")
@@ -139,6 +190,7 @@ def main():
     print("config_hash  : %s" % manifest["aggregate"]["config_hash"])
     print("schema_hash  : %s" % manifest["aggregate"]["schema_hash"])
     print("release_hash : %s" % manifest["aggregate"]["release_hash"])
+    print("ea_hash      : %s" % manifest["ea_hash"])
     print("wrote manifests/build_manifest.json, EA_hash.txt, spec_hash.txt, config_hash.txt")
     return 0
 

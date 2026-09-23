@@ -2,12 +2,12 @@
   "artifact": "G3 Research EA",
   "spec_authority": "Master Specification v0.4",
   "ea_version": "0.4.0-research",
-  "generated_utc": "2026-09-22T15:00:08Z",
+  "generated_utc": "2026-09-23T01:38:20Z",
   "groups": {
     "source": {
       "src/ExitManager.mqh": "93466d9b5e2435d3d396d37ea70ff75db56f705891f3ecc5c6a36a4f7d2808f8",
       "src/G3Types.mqh": "c07d2e541c30a2428a76cc3486c1fa8c3b1cd20f44c12d5b641733f5af173c0c",
-      "src/G3_ResearchEA.mq5": "163f06e694f76dc856bb035c9025cbebb87c74d7dc8c988e7e9447b9e9f9ab53",
+      "src/G3_ResearchEA.mq5": "e69558adde2af9ed81da3b2f67573876d85c521e60377e2dfa0988432e8aae71",
       "src/MarketFilters.mqh": "39f6aedcafbd24eae98c3fe4ad0a142640ec997a95e5aeee6f1545f77ffd248a",
       "src/OrderManager.mqh": "36fb697d158827da9c54fe98c4aacef36b3021f096f2794fdf92b629c5e0e518",
       "src/PortfolioManager.mqh": "361721a246c7e58545255c715bfda8234756637debf8b93f90a8939c6ab4e198",
@@ -41,7 +41,7 @@
       "tests/unit_test_plan.md": "ee4c3ed8c2ad1a127624e7c1b4eaacb0004a27f2a73be0aa51cab028002eb17d"
     },
     "tools": {
-      "tools/compute_hashes.py": "8a07e1c76736d04872500d571f5589ca9c920cc622a2ddc15be4b727b2654c29",
+      "tools/compute_hashes.py": "f1dc61d386fa80ec3f97dd3cde821e79c286d03022caaa1a7400f6bf7f1fbf75",
       "tools/g3research/__init__.py": "ac3154ca2466d655744c15261d99eca896cdfd87ab69d7dbcd4c2851a0bbc35f",
       "tools/g3research/data_intake.py": "e338f8d5e5fa02d368ee32ea45b31de0e780312696ddd6413718a8f6fb20a790",
       "tools/g3research/oat_pipeline.py": "689290ac7c184943168e140bd1318b1eebf7ad37ddadd1fea5c3792d1280ee2b",
@@ -51,18 +51,29 @@
       "tools/gen_log_schema.py": "3910eb689ba1f91763c46059590f7f7659846daa6da65eb59e4a92c183001e89",
       "tools/gen_reason_codes.py": "8da7bd34821d77711701f13ec41b7c93bbc8d64562864db5f6a6854eb3bfd656",
       "tools/gen_unit_test_plan.py": "1906685a8ee22b89788f5f1e0edb053d465364e943914c258cf228052f7e783f",
-      "tools/mql5_static_check.py": "2f2acc214e26ed758cf1b5f66e4b9c397264e1d1ac48c65cef8073b43e33e328"
+      "tools/mql5_static_check.py": "2f2acc214e26ed758cf1b5f66e4b9c397264e1d1ac48c65cef8073b43e33e328",
+      "tools/record_ea_hash.py": "0eb4699176f343d5ff5a803a0e09e530034dde5b895c15cb5ca1016278f2a3e6"
     }
   },
   "aggregate": {
-    "source_hash": "6faa0ea1cffceb67ded95736de2315401aacf3d7ec6158ed7fc151e7028d6ee6",
+    "source_hash": "fa748067870f2952e9d9a8cceaf801fa4c374a211c04b6a143c4eab9e525597f",
     "config_hash": "37c820c795a23d9c30a11b19d8bd811f0bbd0c255819b86695a1c8dd1d2ebe5e",
     "schema_hash": "ea3f1e17364f26c73d5e1686db76d0eaec61bdfedf7f3151aa26bac3ac20a332",
     "tests_hash": "34c5c329d8cfd110f8f6ec879e181bacbf4ad29f12235acfe352a9022c6cec18",
-    "tools_hash": "c2640961fbfd7cdd108a21eef2cc2f8a153ad0b5a58ccff7855573021ca74ca0",
-    "release_hash": "61ddcf9eede0e7b0a4403e57bc347544ada7a798c953916eefa6ceea28f33eb0"
+    "tools_hash": "b659ad39768f7de4aa9eaec428afa50aeee056b96425ec86947f51b685891539",
+    "release_hash": "ea649bdb88e3becbd697d1d08162679f8f7cc1a6d6d940284c14845fb981f4a8"
   },
-  "ea_hash": "PENDING_METAEDITOR_COMPILE",
+  "ea_hash": "PENDING_EX5_NOT_SUPPLIED",
+  "metaeditor_compile": {
+    "toolchain": "MetaEditor / MQL5",
+    "status": "PASS",
+    "errors": 0,
+    "warnings": 0,
+    "reported_by": "operator",
+    "reported_on": "2026-09-23",
+    "verified_in_this_environment": false,
+    "source_change_for_compile": "#property version \"0.4\" -> \"1.000\" in src/G3_ResearchEA.mq5; metadata only, no strategy logic, parameter, risk or Addendum behaviour is affected"
+  },
   "spec_hash": "229f29920ee411cf008442f56a1061583fc564ad50c979c32bf7996ada7ff965",
   "addendum_hash": "fa107ac25d161253511a69b620ef70dd66677406abb539ad8031de2b680aa40c",
   "authority_documents": {
@@ -73,7 +84,7 @@
     "g2_delta_re_audit_v0.4.1a": "5567a3297a79430d40d5b8d9009044b8b32c059e78bff48c5b2ef74c5e7f7f85"
   },
   "notes": [
-    "ea_hash is the SHA-256 of the compiled .ex5 and can only be produced by a MetaEditor build; this repository has no MQL5 toolchain.",
+    "ea_hash is the SHA-256 of the compiled G3_ResearchEA.ex5. The MetaEditor compile itself passed with 0 errors and 0 warnings as reported by the operator, but the binary was not supplied to this environment, so the hash is recorded only once tools/record_ea_hash.py has been given the file or its digest.",
     "spec_hash is the SHA-256 of the Master Specification v0.4 document. The value is confirmed against the hash table printed in the G3 research start record.",
     "No Final Holdout data, path or artifact is referenced anywhere."
   ]

@@ -4,64 +4,92 @@
 
 | gate | status | evidence |
 |------|--------|----------|
-| MQL5 compile (MetaEditor), section 21 | **NOT_RUN** | No MQL5 toolchain exists in this environment: no MetaEditor, no MetaTrader 5, no Wine. `which metaeditor` and a filesystem search return nothing. |
-| MQL5 compile errors | **UNKNOWN** | Cannot be established without MetaEditor. |
-| MQL5 compile warnings | **UNKNOWN** | Cannot be established without MetaEditor. |
-| Static pre-compile check | **PASS** | `python3 tools/mql5_static_check.py` -> 13 files checked, 193 G3 symbols defined, 125 referenced, **0 issues**. |
-| Host unit tests (pure logic) | **PASS** | `tests/run_unit_tests.sh` -> **142 assertions, 0 failures**, built with `g++ -std=c++17 -Wall -Wextra -Werror` (0 compiler warnings). |
-| Integration tests (terminal) | **NOT_RUN** | Require MetaTrader 5; see `tests/integration_test_plan.md` (29 cases, all NOT_RUN). |
+| MetaEditor compile (MQL5) | **PASS — 0 errors / 0 warnings** | Run by the operator on a machine with MetaEditor and reported on 2026-09-23. Not reproducible in this environment, which has no MQL5 toolchain, so the result is recorded with its provenance rather than claimed as locally verified. |
+| Compiled `.ex5` SHA-256 (EA_hash) | **PENDING_EX5_NOT_SUPPLIED** | The binary has not been supplied to this environment. Bind it with `tools/record_ea_hash.py` (see below). |
+| Static pre-compile check | **PASS** | `python3 tools/mql5_static_check.py` -> 13 files, 227 G3 symbols defined, 157 referenced, **0 issues**. |
+| Host unit tests (pure MQL5 logic) | **PASS** | `tests/run_unit_tests.sh` -> **207 assertions, 0 failures**, built with `g++ -std=c++17 -Wall -Wextra -Wpedantic -Werror` (0 warnings). |
+| Research instrument tests (offline) | **PASS** | `tests/run_python_tests.sh` -> **59 tests, 0 failures**. |
+| Integration tests (MT5 terminal) | **NOT_RUN** | 35 cases in `tests/integration_test_plan.md`. |
 
-No compile result is claimed as PASS. Section 21 remains open until the EA is
-built in MetaEditor; this is tracked as ISSUE-016 / CR-014.
+## The change that the compile required
 
-## What was actually verified here
+MetaEditor warns about the `#property version` string format, so one line
+changed:
 
-1. **Structural integrity of all 13 MQL5 files**
-   (`tools/mql5_static_check.py`): balanced braces / parentheses / brackets
-   with comment and string awareness, balanced `#if`/`#endif` nesting, present
-   and matched include guards, every `#include` target resolving, and every
-   `G3*` symbol that is called being defined somewhere in `src/`.
+```
+- #property version   "0.4"
++ #property version   "1.000"
+```
+
+That is the whole diff. It is metadata carried in the `.ex5` header and is
+read by nothing in the strategy: no entry or exit rule, no threshold, no
+risk figure, no Addendum behaviour and no research instrument depends on it.
+The 207 host assertions and 59 research tests were re-run after the change
+and are unchanged.
+
+## What is still open on this gate
+
+`EA_hash` is the one piece missing. Section 13.2 of the specification records
+`spec_hash` / `EA_hash` / `data_hash` together in the OOS access manifest, so
+a G3 result is only citable once the compiled binary is bound to this exact
+source tree. Two ways to do it:
+
+```sh
+python3 tools/record_ea_hash.py /path/to/G3_ResearchEA.ex5
+# or, if only the digest can be shared:
+python3 tools/record_ea_hash.py <64 hex characters>
+
+python3 tools/compute_hashes.py      # folds it into the manifests
+```
+
+`manifests/ea_hash.value` sits outside the hashed groups on purpose, so
+binding the binary afterwards does not disturb `source_hash`, `config_hash`,
+`schema_hash` or `release_hash`. The binding must be made against the source
+hash below; if the source changes again, the EA must be recompiled and
+re-bound.
+
+## Hashes of the compiled tree
+
+```
+source_hash  : fa748067870f2952e9d9a8cceaf801fa4c374a211c04b6a143c4eab9e525597f
+config_hash  : 37c820c795a23d9c30a11b19d8bd811f0bbd0c255819b86695a1c8dd1d2ebe5e
+schema_hash  : ea3f1e17364f26c73d5e1686db76d0eaec61bdfedf7f3151aa26bac3ac20a332
+release_hash : ea649bdb88e3becbd697d1d08162679f8f7cc1a6d6d940284c14845fb981f4a8
+spec_hash    : 229f29920ee411cf008442f56a1061583fc564ad50c979c32bf7996ada7ff965
+addendum_hash: fa107ac25d161253511a69b620ef70dd66677406abb539ad8031de2b680aa40c
+EA_hash      : PENDING_EX5_NOT_SUPPLIED
+```
+
+## What the offline gates actually prove
+
+1. **Structural integrity of all 13 MQL5 files** (`tools/mql5_static_check.py`):
+   balanced braces, parentheses and brackets with comment and string
+   awareness, balanced `#if`/`#endif` nesting, present and matched include
+   guards, every `#include` target resolving, and every `G3*` symbol that is
+   called being defined somewhere in `src/`.
 
 2. **Prohibited-construct scan**: Final Holdout references, martingale,
-   averaging down, netting support, `WebRequest` (external realtime decision
-   source) and optimiser helpers. 0 hits outside comments.
+   averaging down, netting support, `WebRequest` and optimiser helpers. 0
+   hits outside comments.
 
-3. **Forming-bar discipline**: every `CopyClose` / `CopyOpen` / `CopyHigh` /
-   `CopyLow` / `CopyBuffer` / `CopyRates` call that reads from shift 0 must
-   carry an explicit `G3-CHECK: shift0-safe` justification in the four lines
-   above it, or the check fails. Exactly one such call exists
-   (`G3D1Returns()`, which copies index 0 only so that it can be skipped) and
-   it is justified in the source.
+3. **Forming-bar discipline**: any `CopyClose` / `CopyOpen` / `CopyHigh` /
+   `CopyLow` / `CopyBuffer` / `CopyRates` reading from shift 0 must carry an
+   explicit `G3-CHECK: shift0-safe` justification, or the check fails.
 
 4. **Executable verification of the specification arithmetic**: the pure
    sections of every module are compiled by the host C++ compiler through
-   `tests/host/mql5_shim.h` and asserted by 142 test cases covering sections
-   4.1, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 and 16.
+   `tests/host/mql5_shim.h` and asserted by 207 test cases covering v0.4
+   sections 4.1 through 16 and v0.4.1a Addendum A, B and E.
 
-## What the host harness does NOT prove
-
-The shim is not a MetaTrader emulator. MQL5 constructs that C++ accepts
-differently, and everything inside `#ifndef G3_HOST_TEST` blocks
-(indicator handles, `CopyBuffer`, `OrderSend`, `FileOpen`, terminal global
-variables, `PositionSelectByTicket`, the account mode guard), are **not**
-covered. Those are exactly the parts that the MetaEditor compile and the
-integration plan must clear.
+5. **The offline research instruments** (Addendum C, D, F, G) are asserted by
+   59 further tests, including a constant-parity check that fails if the
+   Python mirror of the drawdown bands, risk percentages and portfolio
+   ceilings ever drifts from the MQL5 `#define`s.
 
 ## Reproducing this report
 
 ```sh
 python3 tools/mql5_static_check.py     # structural + prohibition scan
-tests/run_unit_tests.sh                # 142 assertions
-python3 tools/compute_hashes.py        # manifests + source hashes
-python3 tools/gen_log_schema.py        # regenerate schema/research_log_schema.md
-python3 tools/gen_reason_codes.py      # regenerate schema/reason_codes.md
-python3 tools/gen_unit_test_plan.py    # regenerate tests/unit_test_plan.md
+tests/run_all_tests.sh                 # 207 host assertions + 59 research tests
+python3 tools/compute_hashes.py        # manifests + hashes
 ```
-
-## Next step for the compile gate
-
-1. Copy `src/` into `MQL5/Experts/G3Research/`.
-2. Compile `G3_ResearchEA.mq5` in MetaEditor.
-3. Record every error and warning verbatim. Do not silence a warning; report it
-   with its cause.
-4. Record `sha256sum G3_ResearchEA.ex5` into `manifests/EA_hash.txt`.

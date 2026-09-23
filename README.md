@@ -22,9 +22,13 @@ Final Holdout data.
 
 ## Status
 
-* Compile (MetaEditor): **NOT_RUN** - no MQL5 toolchain in this environment.
+* Compile (MetaEditor): **PASS - 0 errors / 0 warnings**, run by the operator
+  on 2026-09-23. This environment has no MQL5 toolchain, so the result is
+  recorded with its provenance.
+* Compiled `.ex5` hash: **not yet bound** - see `tools/record_ea_hash.py`.
 * Static pre-compile check: **PASS** (0 issues).
-* Host unit tests: **PASS** (142 assertions, 0 failures).
+* Host unit tests: **PASS** (207 assertions, 0 failures).
+* Research instrument tests: **PASS** (59 tests, 0 failures).
 * Integration tests: **NOT_RUN** - require MetaTrader 5.
 * G3 data run: **not started**; the required feeds and account parameters were
   not supplied, and no result has been fabricated.
@@ -35,7 +39,7 @@ See `docs/G4_compile_report.md` and `docs/change_requests.md`.
 
 ```sh
 python3 tools/mql5_static_check.py
-tests/run_unit_tests.sh
+tests/run_all_tests.sh                 # host assertions + research instruments
 python3 tools/compute_hashes.py
 ```
 

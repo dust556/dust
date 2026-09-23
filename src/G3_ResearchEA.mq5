@@ -15,7 +15,7 @@
 //|  limits are evaluated across all instances that share InpMagic.   |
 //+------------------------------------------------------------------+
 #property copyright "G3 Research"
-#property version   "0.4"
+#property version   "1.000"
 #property description "G3 Research EA - Master Specification v0.4 research build"
 
 #include "G3Types.mqh"
