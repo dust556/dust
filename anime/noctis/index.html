@@ -1,0 +1,866 @@
+<title>NOCTIS Teaser</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500&family=JetBrains+Mono:wght@400;600&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap">
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0b0b0e; --panel:#141419; --line:#272630; --text:#e9e7ee; --mute:#8f8c9b;
+  --ren:#39d5ff; --yuki:#ff2d4b; --kai:#9b6bff; --shion:#58ff9a; --orphe:#e6b650; --none:#8f8c9b;
+  --serif:"Cinzel","Trajan Pro","Times New Roman",serif;
+  --body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+html,body{background:var(--bg);color:var(--text)}
+body{font-family:var(--body);font-size:14px;line-height:1.7}
+.wrap{max-width:1120px;margin:0 auto;padding-inline:16px;padding-block:22px 56px;display:flex;flex-direction:column;gap:14px}
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 18px}
+h1{margin:0;font-family:var(--serif);font-weight:400;font-size:clamp(26px,3.6vw,36px);letter-spacing:.42em;line-height:1.1}
+.kicker{font-family:var(--mono);font-size:11px;letter-spacing:.3em;color:var(--mute)}
+.stage{position:relative;width:100%;max-width:100%;aspect-ratio:16/9;background:#000;overflow:hidden;user-select:none}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.title{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0}
+.title span{font-family:var(--serif);font-weight:400;font-size:clamp(34px,8.2vw,96px);letter-spacing:.5em;margin-right:-.5em;color:#ecebf2}
+.replay{position:absolute;left:50%;bottom:12%;transform:translateX(-50%);font:700 14px var(--body);color:#0b0b0e;background:#ecebf2;border:0;border-radius:2px;padding:9px 22px;cursor:pointer}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.bar button{font:700 13px var(--body);color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:7px 14px;cursor:pointer;min-width:44px}
+.bar button:hover{border-color:#4a4858}
+.bar button[aria-pressed="true"]{border-color:var(--text)}
+button:focus-visible,#scrub:focus-visible{outline:2px solid var(--ren);outline-offset:2px}
+#scrub{flex:1 1 220px;min-width:0;accent-color:#d9d7e2}
+.tc{font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums;color:var(--mute);white-space:nowrap}
+.tc b{color:var(--text);font-weight:600}
+.now{font-size:13px;color:var(--mute);white-space:nowrap}
+.now b{color:var(--text);font-family:var(--mono);font-weight:600;margin-right:6px}
+.lbl{font-family:var(--mono);font-size:11px;letter-spacing:.25em;color:var(--mute);margin:8px 0 0}
+.cuts{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px}
+.cuts button{width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--c,var(--none));border-radius:3px;color:var(--text);padding:6px 10px;cursor:pointer;font:400 13px/1.45 var(--body)}
+.cuts button .no{display:block;font-family:var(--mono);font-size:11px;color:var(--mute);font-variant-numeric:tabular-nums}
+.cuts button.on{background:#1f1f27;border-color:var(--c,var(--none))}
+.note{max-width:70ch;color:#bdbac8;font-size:13px;margin:0}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>NOCTIS</h1>
+    <span class="kicker">TEASER PV · 15 SEC · REAL-TIME 3DCG</span>
+  </header>
+
+  <div class="stage" id="stage">
+    <canvas id="gl"></canvas>
+    <canvas id="fx"></canvas>
+    <div class="title" id="title"><span>NOCTIS</span></div>
+    <button class="replay" id="replay" hidden>もう一度見る</button>
+  </div>
+
+  <div class="bar">
+    <button id="play" aria-label="一時停止">❚❚</button>
+    <button id="restart">最初から</button>
+    <input id="scrub" type="range" min="0" max="15" step="0.01" value="0" aria-label="再生位置">
+    <span class="tc" id="tc"><b>0+00</b> / 15+00</span>
+    <button id="snd" aria-pressed="false">サウンド オフ</button>
+    <span class="now" id="now"></span>
+  </div>
+
+  <p class="lbl">カット表　秒+コマ（24コマ/秒）</p>
+  <ol class="cuts" id="cuts"></ol>
+  <p class="note">映像内には文字を入れず、最後のタイトルカードだけに「NOCTIS」を出しています。キャラクターの配色と能力はキャラクターラインナップに合わせました（レン＝青い黒環、ユキ＝赤いワイヤー、カイ＝紫の重力、シオン＝緑の音波、オルフェ＝黒い影と金）。</p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
+<script>
+(() => {
+const DUR = 15;
+const TAU = Math.PI * 2, PI = Math.PI;
+const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, k) => a + (b - a) * k;
+const sstep = (a, b, x) => { const k = clamp((x - a) / (b - a)); return k * k * (3 - 2 * k); };
+const eOutC = k => 1 - Math.pow(1 - k, 3);
+const eInC = k => k * k * k;
+const eInOut = k => k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+const eOutBack = k => { const c = 1.9; return 1 + (c + 1) * Math.pow(k - 1, 3) + c * Math.pow(k - 1, 2); };
+const mod = (a, n) => ((a % n) + n) % n;
+function rng(seed) { let s = (seed * 2654435761) >>> 0 || 1; return () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; }; }
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const C3 = (r, g, b) => new THREE.Color().setRGB(r, g, b);
+
+// ---------- renderer & passes ----------
+const stage = document.getElementById('stage'), glc = document.getElementById('gl'), fxc = document.getElementById('fx'), ctx = fxc.getContext('2d');
+const renderer = new THREE.WebGLRenderer({ canvas: glc, antialias: false, powerPreference: 'high-performance' });
+const PR = Math.min(devicePixelRatio || 1, 1.5);
+renderer.setPixelRatio(PR);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, 16 / 9, 0.02, 1200);
+camera.layers.enable(1);
+const mirrorCam = new THREE.PerspectiveCamera(); mirrorCam.layers.set(0);
+const HF = { type: THREE.HalfFloatType };
+const rtScene = new THREE.WebGLRenderTarget(1, 1, Object.assign({ samples: 4 }, HF));
+const rtRef = new THREE.WebGLRenderTarget(1, 1, HF);
+const rtA = new THREE.WebGLRenderTarget(1, 1, HF), rtB = new THREE.WebGLRenderTarget(1, 1, HF);
+const quadScene = new THREE.Scene(), quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2)); quad.frustumCulled = false; quadScene.add(quad);
+const VS = 'varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}';
+const pm = (u, fs) => new THREE.ShaderMaterial({ uniforms: u, vertexShader: VS, fragmentShader: fs, depthTest: false, depthWrite: false });
+const brightMat = pm({ t: { value: null } }, 'uniform sampler2D t;varying vec2 vUv;void main(){vec3 c=texture2D(t,vUv).rgb;float l=max(c.r,max(c.g,c.b));gl_FragColor=vec4(c*smoothstep(.72,1.35,l),1.);}');
+const blurMat = pm({ t: { value: null }, dir: { value: new THREE.Vector2() } }, 'uniform sampler2D t;uniform vec2 dir;varying vec2 vUv;void main(){vec3 c=texture2D(t,vUv).rgb*.227;c+=(texture2D(t,vUv+dir*1.385).rgb+texture2D(t,vUv-dir*1.385).rgb)*.316;c+=(texture2D(t,vUv+dir*3.231).rgb+texture2D(t,vUv-dir*3.231).rgb)*.07;gl_FragColor=vec4(c,1.);}');
+const compMat = pm({
+  tS: { value: rtScene.texture }, tB: { value: rtA.texture }, uBloom: { value: 1 }, uFlash: { value: 0 }, uFlashC: { value: V(1, 1, 1) }, uFade: { value: 0 }, uAb: { value: .002 }, uT: { value: 0 },
+  uLens: { value: new THREE.Vector2(.5, .5) }, uLensS: { value: 0 }, uAsp: { value: 16 / 9 }, uTint: { value: V(1, 1, 1) }
+}, `uniform sampler2D tS,tB;uniform float uBloom,uFlash,uFade,uAb,uT,uLensS,uAsp;uniform vec2 uLens;uniform vec3 uFlashC,uTint;varying vec2 vUv;
+float h(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
+void main(){vec2 uv=vUv;vec2 d=uv-uLens;d.x*=uAsp;float r=length(d);
+ vec2 n=d/max(r,1e-4);n.x/=uAsp;uv-=n*uLensS*r*exp(-r*r*14.);uv+=n*uLensS*.04*sin(r*60.-uT*20.)*exp(-r*r*10.);
+ vec2 ca=(uv-.5)*uAb;vec3 c=vec3(texture2D(tS,uv+ca).r,texture2D(tS,uv).g,texture2D(tS,uv-ca).b);
+ c+=texture2D(tB,uv).rgb*uBloom;c*=uTint;c=c/(1.+c*.22)*1.18;
+ float v=smoothstep(1.05,.3,length((vUv-.5)*vec2(1.,.85)));c*=.45+.55*v;
+ c+=(h(vUv*vec2(913.,577.)+fract(uT*7.))-.5)*.035;c=mix(c,uFlashC,uFlash);c*=1.-uFade;gl_FragColor=vec4(c,1.);}`);
+function pass(mat, target) { quad.material = mat; renderer.setRenderTarget(target); renderer.render(quadScene, quadCam); }
+
+// ---------- shared materials & textures ----------
+const gradTex = (() => { const d = new Uint8Array([55, 55, 55, 255, 135, 135, 135, 255, 255, 255, 255, 255]); const t = new THREE.DataTexture(d, 3, 1, THREE.RGBAFormat); t.minFilter = t.magFilter = THREE.NearestFilter; t.needsUpdate = true; return t; })();
+const toon = (c, o = {}) => new THREE.MeshToonMaterial(Object.assign({ color: c, gradientMap: gradTex }, o));
+const basic = (c, o = {}) => new THREE.MeshBasicMaterial(Object.assign({ color: c, fog: false }, o));
+const addB = (c, o = {}) => basic(c, Object.assign({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }, o));
+const OUT = new THREE.ShaderMaterial({ uniforms: { th: { value: .011 } }, vertexShader: 'uniform float th;void main(){vec3 p=position+normal*th;gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.0);}', fragmentShader: 'void main(){gl_FragColor=vec4(.012,.01,.02,1.);}', side: THREE.BackSide });
+function canvasTex(size, draw) { const c = document.createElement('canvas'); c.width = c.height = size; draw(c.getContext('2d'), size); return new THREE.CanvasTexture(c); }
+const glowTex = canvasTex(128, (g, s) => { const r = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2); r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(.3, 'rgba(255,255,255,.45)'); r.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = r; g.fillRect(0, 0, s, s); });
+const discTex = canvasTex(128, (g, s) => { g.fillStyle = '#fff'; g.beginPath(); g.arc(s / 2, s / 2, s * .46, 0, TAU); g.fill(); });
+const haloTex = canvasTex(256, (g, s) => { const r = g.createRadialGradient(s / 2, s / 2, s * .2, s / 2, s / 2, s / 2); r.addColorStop(0, 'rgba(255,255,255,0)'); r.addColorStop(.3, 'rgba(255,255,255,.95)'); r.addColorStop(.36, 'rgba(255,255,255,.35)'); r.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = r; g.fillRect(0, 0, s, s); });
+function eyeTex(col) {
+  return canvasTex(128, (g) => {
+    g.save(); g.beginPath(); g.moveTo(14, 60); g.quadraticCurveTo(60, 14, 116, 40); g.lineTo(112, 92); g.quadraticCurveTo(64, 118, 20, 96); g.closePath();
+    g.fillStyle = '#f4f1f6'; g.fill(); g.clip();
+    const ir = g.createLinearGradient(0, 22, 0, 112); ir.addColorStop(0, '#0b0a10'); ir.addColorStop(.45, col); ir.addColorStop(1, '#ffffff');
+    g.fillStyle = ir; g.beginPath(); g.ellipse(66, 70, 30, 42, 0, 0, TAU); g.fill();
+    g.fillStyle = 'rgba(8,6,14,.9)'; g.beginPath(); g.ellipse(66, 70, 12, 19, 0, 0, TAU); g.fill();
+    g.strokeStyle = 'rgba(10,8,16,.8)'; g.lineWidth = 3; g.beginPath(); g.ellipse(66, 70, 30, 42, 0, 0, TAU); g.stroke();
+    g.fillStyle = '#fff'; g.beginPath(); g.arc(52, 52, 9, 0, TAU); g.fill(); g.beginPath(); g.arc(80, 90, 4, 0, TAU); g.fill();
+    g.restore();
+    g.strokeStyle = '#0c0a12'; g.lineCap = 'round'; g.lineWidth = 11; g.beginPath(); g.moveTo(12, 62); g.quadraticCurveTo(60, 12, 118, 38); g.stroke();
+    g.lineWidth = 6; g.beginPath(); g.moveTo(112, 38); g.lineTo(124, 52); g.stroke();
+    g.lineWidth = 3; g.beginPath(); g.moveTo(26, 98); g.quadraticCurveTo(66, 116, 108, 94); g.stroke();
+  });
+}
+
+// ---------- character rig ----------
+const cap = (r, l) => new THREE.CapsuleGeometry(r, l, 4, 12);
+const J = (p, pos) => { const g = new THREE.Group(); g.position.set(...pos); p.add(g); return g; };
+function part(parent, geo, mat, pos, rot, scl, outline = true) {
+  const m = new THREE.Mesh(geo, mat);
+  if (pos) m.position.set(...pos); if (rot) m.rotation.set(...rot); if (scl) m.scale.set(...scl);
+  parent.add(m); if (outline) m.add(new THREE.Mesh(geo, OUT)); return m;
+}
+const _up = V(0, 1, 0);
+function clump(parent, mat, pos, dir, len, rad) {
+  const geo = new THREE.ConeGeometry(rad, len, 7); geo.translate(0, len / 2, 0);
+  const m = part(parent, geo, mat, pos); m.quaternion.setFromUnitVectors(_up, V(...dir).normalize()); return m;
+}
+function stick(parent, mat, a, b, r, outline = false) {
+  const A = V(...a), B = V(...b), L = A.distanceTo(B);
+  const m = part(parent, new THREE.CylinderGeometry(r, r, L, 6), mat, null, null, null, outline);
+  m.position.copy(A).add(B).multiplyScalar(.5); m.quaternion.setFromUnitVectors(_up, B.clone().sub(A).normalize()); return m;
+}
+function coatSkirt(parent, outer, inner, rt, rb, h, y, open = 1.0) {
+  const g = new THREE.Group(); g.position.y = y; parent.add(g);
+  const geo = new THREE.CylinderGeometry(rt, rb, h, 20, 1, true, open / 2, TAU - open); geo.translate(0, -h / 2, 0);
+  const o = new THREE.Mesh(geo, outer); g.add(o);
+  const ig = new THREE.CylinderGeometry(rt * .97, rb * .97, h * .99, 20, 1, true, open / 2, TAU - open); ig.translate(0, -h / 2, 0);
+  g.add(new THREE.Mesh(ig, inner));
+  const og = new THREE.CylinderGeometry(rt + .012, rb + .014, h + .01, 20, 1, true, open / 2, TAU - open); og.translate(0, -h / 2, 0);
+  const ol = new THREE.Mesh(og, new THREE.MeshBasicMaterial({ color: 0x030205, side: THREE.BackSide })); g.add(ol);
+  return g;
+}
+const JN = ['torso', 'head', 'lSh', 'lEl', 'rSh', 'rEl', 'lHip', 'lKn', 'rHip', 'rKn'];
+function buildBody(o) {
+  const M = o.M, root = new THREE.Group(), j = { skirts: [], eyes: [] };
+  j.hips = J(root, [0, 1, 0]);
+  part(j.hips, cap(o.hipR, .08), M.bottom, [0, 0, 0], [0, 0, PI / 2]);
+  j.torso = J(j.hips, [0, .05, 0]);
+  part(j.torso, cap(o.chestR, .2), M.top, [0, .23, 0], null, [1, 1, .85]);
+  part(j.torso, cap(.042, .06), M.skin, [0, .5, 0]);
+  j.head = J(j.torso, [0, .55, 0]);
+  part(j.head, new THREE.SphereGeometry(.113, 24, 18), M.skin, [0, .115, 0], null, [.96, 1.08, 1]);
+  part(j.head, new THREE.SphereGeometry(.078, 16, 12), M.skin, [0, .055, .025], null, [1, 1, 1], false);
+  if (o.eyes) {
+    o.eyes.forEach((tex, k) => {
+      const s = k === 0 ? 1 : -1;
+      const e = new THREE.Mesh(new THREE.PlaneGeometry(.05, .05), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: .35 }));
+      e.position.set(s * .041, .1, .106); e.rotation.y = s * .33; e.scale.x = s; j.head.add(e); j.eyes.push(e);
+    });
+    for (const s of [1, -1]) { const b = part(j.head, new THREE.BoxGeometry(.04, .007, .006), M.hair, [s * .044, .142, .104], [0, s * .3, -s * .12], null, false); }
+    part(j.head, new THREE.BoxGeometry(.02, .004, .004), new THREE.MeshBasicMaterial({ color: 0x7a3a44 }), [0, .038, .1], null, null, false);
+  }
+  for (const k of ['l', 'r']) {
+    const s = k === 'l' ? 1 : -1;
+    const sh = j[k + 'Sh'] = J(j.torso, [s * o.shX, .42, 0]);
+    part(sh, new THREE.SphereGeometry(o.armR * 1.35, 12, 10), M.upper, [0, 0, 0]);
+    part(sh, cap(o.armR, .2), M.upper, [0, -.14, 0]);
+    const el = j[k + 'El'] = J(sh, [0, -.28, 0]);
+    part(el, cap(o.foreR, .19), M.fore, [0, -.13, 0]);
+    part(el, new THREE.SphereGeometry(.036, 10, 8), M.hand, [0, -.29, 0], null, [1, 1.2, .8]);
+    const hp = j[k + 'Hip'] = J(j.hips, [s * .088, -.03, 0]);
+    part(hp, cap(o.legR, .34), M.thigh, [0, -.23, 0]);
+    const kn = j[k + 'Kn'] = J(hp, [0, -.47, 0]);
+    part(kn, cap(o.legR * .82, .34), M.shin, [0, -.23, 0]);
+    part(kn, new THREE.BoxGeometry(.095, .075, .24), M.shoe, [0, -.47, .045]);
+    part(kn, new THREE.BoxGeometry(.1, .025, .25), M.sole, [0, -.505, .045], null, null, false);
+    j[k + 'Foot'] = J(kn, [0, -.5, .06]);
+  }
+  return { root, j, M };
+}
+function show(f, x, y, z, rotY, pose, t, wind = 1) {
+  f.root.visible = true; f.root.position.set(x, y, z); f.root.rotation.set(0, rotY, 0);
+  for (const n of JN) { const r = pose[n] || Z3; f.j[n].rotation.set(r[0], r[1], r[2]); }
+  f.j.hips.position.y = pose.hipsY ?? 1;
+  f.j.skirts.forEach((s, k) => { s.rotation.x = (.05 + .07 * wind) + Math.sin(t * 5 + k * 1.3) * .045 * wind; s.rotation.z = Math.sin(t * 3.7 + k) * .03 * wind; });
+  for (const e of f.j.eyes) e.scale.y = f.eyeOpen ?? 1;
+}
+const Z3 = [0, 0, 0];
+
+// ----- the five -----
+const SKIN = 0xe6cbbd;
+function buildRen() {
+  const M = { skin: toon(SKIN), hair: toon(0x121218), top: toon(0x121217), bottom: toon(0x111115), upper: toon(0x17171d), fore: toon(0x17171d), hand: toon(SKIN), thigh: toon(0x111115), shin: toon(0x111115), shoe: toon(0x0d0d10), sole: toon(0xdedde6) };
+  const f = buildBody({ M, hipR: .1, chestR: .13, shX: .185, armR: .052, foreR: .046, legR: .07, eyes: [eyeTex('#7f9db6'), eyeTex('#7f9db6')] });
+  const j = f.j, h = j.head;
+  part(h, new THREE.SphereGeometry(.123, 20, 14, 0, TAU, 0, PI * .56), M.hair, [0, .122, -.006]);
+  const cl = [[[-.065, .205, .085], [-.4, -1, .45], .085, .024], [[-.022, .215, .095], [-.1, -1, .5], .07, .022], [[.03, .215, .095], [.15, -1, .45], .085, .024], [[.07, .2, .08], [.45, -1, .4], .08, .022],
+    [[.105, .13, .02], [.3, -1, .1], .15, .03], [[-.105, .13, .02], [-.3, -1, .1], .15, .03], [[.09, .17, -.06], [.7, -.5, -.4], .12, .03], [[-.09, .17, -.06], [-.7, -.5, -.4], .12, .03],
+    [[0, .15, -.1], [0, -.55, -1], .16, .04], [[.06, .1, -.1], [.3, -1, -.5], .15, .032], [[-.06, .1, -.1], [-.3, -1, -.5], .15, .032], [[0, .22, -.06], [0, .25, -1], .14, .035],
+    [[.04, .235, 0], [.5, .7, -.4], .1, .03], [[-.03, .24, .02], [-.4, .6, .3], .09, .028], [[.0, .24, .05], [.15, .5, .7], .09, .026]];
+  for (const c of cl) clump(h, M.hair, ...c);
+  const coat = toon(0x17171d), lining = toon(0x1592b3, { side: THREE.BackSide });
+  part(j.torso, new THREE.CylinderGeometry(.155, .14, .46, 18, 1, true, .55, TAU - 1.1), toon(0x17171d, { side: THREE.DoubleSide }), [0, .22, 0], null, null, false);
+  j.skirts.push(coatSkirt(j.hips, toon(0x17171d), lining, .15, .3, .86, .06, 1.0));
+  part(j.torso, new THREE.SphereGeometry(.12, 14, 10, 0, TAU, 0, PI * .6), coat, [0, .44, -.1], [-.9, 0, 0], [1.25, 1, .8]);
+  const glowC = basic(C3(.35, 1.7, 2.3));
+  for (const s of [1, -1]) { stick(j.hips, glowC, [s * .1, -.02, .11], [s * .12, -.5, .12], .008); stick(j.hips, glowC, [s * .06, -.02, .12], [s * .05, -.32, .13], .006); }
+  stick(j.torso, glowC, [.05, .47, .1], [.03, .25, .13], .006);
+  part(j.torso, new THREE.TorusGeometry(.14, .01, 6, 24), glowC, [0, 0, 0], [PI / 2, 0, 0], null, false);
+  return f;
+}
+function buildYuki() {
+  const white = toon(0xf1eff2), red = toon(0xd9182f);
+  const M = { skin: toon(SKIN), hair: toon(0xdcdce6), top: toon(0x121215), bottom: toon(0x121215), upper: toon(SKIN), fore: white, hand: toon(SKIN), thigh: toon(SKIN), shin: toon(SKIN), shoe: red, sole: toon(0x16161a) };
+  const f = buildBody({ M, hipR: .105, chestR: .118, shX: .165, armR: .044, foreR: .075, legR: .066, eyes: [eyeTex('#e5334d'), eyeTex('#e5334d')] });
+  const j = f.j, h = j.head;
+  part(h, new THREE.SphereGeometry(.128, 20, 14, 0, TAU, 0, PI * .5), M.hair, [0, .118, -.004]);
+  const shellG = new THREE.SphereGeometry(.14, 24, 16, PI / 2 + .95, TAU - 1.9, .2, PI * .52);
+  part(h, shellG, toon(0xdcdce6, { side: THREE.FrontSide }), [0, .115, -.01]);
+  part(h, new THREE.SphereGeometry(.136, 24, 16, PI / 2 + .95, TAU - 1.9, .2, PI * .52), toon(0xe0233c, { side: THREE.BackSide }), [0, .115, -.01], null, null, false);
+  const bangs = [[[-.06, .21, .085], [-.3, -1, .45], .08, .024], [[-.02, .215, .095], [0, -1, .5], .065, .022], [[.025, .215, .095], [.15, -1, .45], .075, .022], [[.065, .2, .08], [.4, -1, .35], .08, .022]];
+  for (const c of bangs) clump(h, M.hair, ...c);
+  for (const s of [1, -1]) clump(h, toon(0xe0233c), [s * .11, .1, .04], [s * .15, -1, .15], .13, .025);
+  part(j.torso, cap(.1, .1), toon(SKIN), [0, .1, 0], null, [1, 1, .8]);
+  part(j.torso, cap(.12, .08), M.top, [0, .3, 0], null, [1, 1, .85]);
+  for (const s of [1, -1]) part(j[(s > 0 ? 'l' : 'r') + 'Hip'], cap(.078, .08), M.bottom, [0, -.07, 0]);
+  for (const k of ['lKn', 'rKn']) part(j[k], cap(.064, .16), red, [0, -.36, 0]);
+  part(j.lHip, new THREE.TorusGeometry(.07, .01, 6, 16), toon(0x0b0b0d), [0, -.2, 0], [PI / 2, 0, 0], null, false);
+  j.skirts.push(coatSkirt(j.torso, toon(0xf1eff2), toon(0xc8142b, { side: THREE.BackSide }), .21, .27, .5, .2, 1.8));
+  for (const k of ['lEl', 'rEl']) part(j[k], new THREE.TorusGeometry(.06, .016, 6, 16), red, [0, -.23, 0], [PI / 2, 0, 0], null, false);
+  for (const s of [1, -1]) stick(j.hips, red, [s * .07, -.02, .1], [s * .09, -.42, .11], .01);
+  return f;
+}
+function buildKai() {
+  const suit = toon(0x20202a);
+  const M = { skin: toon(SKIN), hair: toon(0x0f0f13), top: toon(0x0b0b0e), bottom: suit, upper: suit, fore: suit, hand: toon(0x09090b), thigh: suit, shin: suit, shoe: toon(0x07070a), sole: toon(0x07070a) };
+  const f = buildBody({ M, hipR: .1, chestR: .135, shX: .19, armR: .054, foreR: .048, legR: .072, eyes: null });
+  const j = f.j, h = j.head;
+  part(h, new THREE.SphereGeometry(.124, 20, 14, 0, TAU, 0, PI * .55), M.hair, [0, .122, -.006]);
+  const cl = [[[0, .21, .07], [0, .35, -1], .15, .045], [[.05, .2, .065], [.2, .3, -1], .14, .04], [[-.05, .2, .065], [-.2, .3, -1], .14, .04], [[.1, .14, -.01], [.25, -.2, -1], .12, .035], [[-.1, .14, -.01], [-.25, -.2, -1], .12, .035], [[.03, .19, .1], [.3, -1, .25], .09, .018]];
+  for (const c of cl) clump(h, M.hair, ...c);
+  const lens = toon(0x040406);
+  for (const s of [1, -1]) part(h, new THREE.BoxGeometry(.055, .028, .012), lens, [s * .041, .102, .109], [0, s * .3, 0]);
+  part(h, new THREE.BoxGeometry(.03, .006, .008), lens, [0, .108, .113], null, null, false);
+  for (const s of [1, -1]) part(h, new THREE.BoxGeometry(.035, .003, .002), basic(C3(1.1, .7, 1.8)), [s * .043, .109, .117], [0, s * .3, 0], null, false);
+  j.glasses = h;
+  part(j.torso, new THREE.CylinderGeometry(.155, .14, .46, 18, 1, true, .7, TAU - 1.4), toon(0x131318, { side: THREE.DoubleSide }), [0, .22, 0], null, null, false);
+  j.skirts.push(coatSkirt(j.hips, toon(0x131318), toon(0x5b35b0, { side: THREE.BackSide }), .16, .34, 1.0, .08, 1.1));
+  part(j.torso, new THREE.TorusGeometry(.07, .004, 6, 20), basic(C3(1.2, 1.2, 1.3)), [0, .38, .1], [PI / 2 - .5, 0, 0], null, false);
+  return f;
+}
+function buildShion() {
+  const blk = toon(0x141418), green = basic(C3(.35, 2.2, .95));
+  const M = { skin: toon(SKIN), hair: toon(0xd7d8e2), top: blk, bottom: toon(0x55565e), upper: blk, fore: blk, hand: toon(SKIN), thigh: toon(SKIN), shin: toon(0xf2f2f4), shoe: toon(0x121214), sole: toon(0xe8e8ec) };
+  const f = buildBody({ M, hipR: .1, chestR: .15, shX: .17, armR: .064, foreR: .07, legR: .064, eyes: [eyeTex('#5dff99'), eyeTex('#5f93ff')] });
+  const j = f.j, h = j.head;
+  part(h, new THREE.SphereGeometry(.126, 20, 14, 0, TAU, 0, PI * .5), M.hair, [0, .118, -.004]);
+  for (const c of [[[-.055, .21, .09], [-.25, -1, .45], .08, .024], [[-.015, .215, .1], [0, -1, .5], .07, .022], [[.03, .21, .095], [.2, -1, .45], .08, .022], [[.07, .195, .075], [.4, -1, .3], .085, .022],
+    [[.09, .08, .06], [.08, -1, .12], .3, .03], [[-.09, .08, .06], [-.08, -1, .12], .3, .03]]) clump(h, M.hair, ...c);
+  part(h, new THREE.SphereGeometry(.165, 24, 16, PI / 2 + 1.05, TAU - 2.1, 0, PI * .72), toon(0x141418, { side: THREE.DoubleSide }), [0, .125, -.018]);
+  for (const s of [1, -1]) {
+    part(h, new THREE.CylinderGeometry(.05, .05, .045, 18), toon(0x0d0d10), [s * .17, .11, 0], [0, 0, PI / 2]);
+    part(h, new THREE.TorusGeometry(.047, .007, 6, 20), green, [s * .195, .11, 0], [0, PI / 2, 0], null, false);
+  }
+  part(h, new THREE.TorusGeometry(.18, .012, 6, 24, PI), toon(0x0d0d10), [0, .12, -.02], null, null, false);
+  part(j.torso, cap(.16, .2), blk, [0, .22, 0], null, [1.05, 1, .9]);
+  j.skirts.push(coatSkirt(j.hips, toon(0x141418), toon(0x3a3b42, { side: THREE.BackSide }), .18, .26, .34, .1, .5));
+  for (const k of ['lEl', 'rEl']) part(j[k], new THREE.TorusGeometry(.072, .008, 6, 18), green, [0, -.2, 0], [PI / 2, 0, 0], null, false);
+  stick(j.torso, green, [.1, .45, .12], [.07, -.05, .15], .006); stick(j.torso, green, [-.1, .45, .12], [-.07, -.05, .15], .006);
+  return f;
+}
+function buildOrphe() {
+  const white = toon(0xa9a49b), gold = basic(C3(2.0, 1.45, .55));
+  const M = { skin: toon(SKIN), hair: toon(0xdcd3b8), top: toon(0x0b0b0e), bottom: toon(0xdedbd3), upper: white, fore: white, hand: toon(SKIN), thigh: toon(0xdedbd3), shin: toon(0xdedbd3), shoe: toon(0x08080a), sole: toon(0x08080a) };
+  const f = buildBody({ M, hipR: .1, chestR: .135, shX: .19, armR: .058, foreR: .052, legR: .072, eyes: [eyeTex('#e8b54c'), eyeTex('#e8b54c')] });
+  const j = f.j, h = j.head;
+  part(h, new THREE.SphereGeometry(.125, 20, 14, 0, TAU, 0, PI * .56), M.hair, [0, .12, -.006]);
+  for (const c of [[[-.03, .21, .08], [-.9, -.5, .45], .15, .035], [[.02, .21, .085], [-.8, -.6, .4], .14, .032], [[.07, .19, .07], [.4, -1, .35], .12, .03],
+    [[.108, .11, .01], [.2, -1, 0], .18, .032], [[-.108, .11, .01], [-.2, -1, 0], .18, .032], [[0, .09, -.1], [0, -1, -.3], .2, .05], [[.07, .08, -.09], [.3, -1, -.35], .18, .035], [[-.07, .08, -.09], [-.3, -1, -.35], .18, .035]]) clump(h, M.hair, ...c);
+  part(j.torso, new THREE.CylinderGeometry(.16, .145, .46, 18, 1, true, .75, TAU - 1.5), toon(0xa9a49b, { side: THREE.DoubleSide }), [0, .22, 0], null, null, false);
+  const sk = coatSkirt(j.hips, toon(0xa9a49b), toon(0x0d0d10, { side: THREE.BackSide }), .165, .4, 1.02, .08, 1.3); j.skirts.push(sk);
+  part(sk, new THREE.TorusGeometry(.4, .012, 6, 40), gold, [0, -1.0, 0], [PI / 2, 0, 0], null, false).scale.set(1, 1, 1);
+  for (const s of [1, -1]) { const a = .65 * s; stick(sk, gold, [Math.sin(a) * .166, 0, Math.cos(a) * .166], [Math.sin(a) * .4, -1.0, Math.cos(a) * .4], .008); }
+  for (const k of ['lEl', 'rEl']) part(j[k], new THREE.TorusGeometry(.056, .01, 6, 18), gold, [0, -.24, 0], [PI / 2, 0, 0], null, false);
+  part(j.torso, new THREE.TorusGeometry(.075, .005, 6, 20), gold, [0, .36, .1], [PI / 2 - .5, 0, 0], null, false);
+  stick(j.torso, gold, [0, .3, .13], [0, .05, .14], .005);
+  return f;
+}
+
+// ---------- poses ----------
+const P = {
+  stand: { lSh: [.05, 0, .12], lEl: [-.15, 0, 0], rSh: [.05, 0, -.12], rEl: [-.15, 0, 0], lHip: [0, 0, .04], rHip: [0, 0, -.04] },
+  renPocket: { torso: [-.03, 0, 0], lSh: [.22, 0, .2], lEl: [-.4, 0, 0], rSh: [.22, 0, -.2], rEl: [-.4, 0, 0], lHip: [-.05, 0, .08], rHip: [.08, 0, -.06], rKn: [.1, 0, 0], lKn: [.05, 0, 0] },
+  renStepUp: { hipsY: .99, torso: [.06, 0, 0], lSh: [.3, 0, .2], lEl: [-.4, 0, 0], rSh: [-.1, 0, -.2], rEl: [-.4, 0, 0], lHip: [.15, 0, .04], rHip: [-.75, 0, -.04], rKn: [.9, 0, 0] },
+  renStepDown: { hipsY: .97, torso: [.03, 0, 0], lSh: [.25, 0, .2], lEl: [-.4, 0, 0], rSh: [.1, 0, -.2], rEl: [-.4, 0, 0], lHip: [.3, 0, .04], lKn: [.25, 0, 0], rHip: [-.35, 0, -.04], rKn: [.15, 0, 0] },
+  renSweep: { hipsY: .93, torso: [.05, -.45, 0], head: [0, .35, 0], rSh: [-1.45, 0, -1.25], rEl: [-.08, 0, 0], lSh: [.2, 0, .35], lEl: [-.5, 0, 0], lHip: [-.35, 0, .15], lKn: [.45, 0, 0], rHip: [.3, 0, -.15], rKn: [.15, 0, 0] },
+  yuki: { torso: [0, .1, .06], head: [.05, -.15, -.1], rSh: [-2.3, 0, -.45], rEl: [-2.0, 0, 0], lSh: [.1, 0, .35], lEl: [-.4, 0, 0], lHip: [-.05, 0, .12], rHip: [.04, 0, -.02], rKn: [.08, 0, 0] },
+  yukiSwing: { torso: [-.25, 0, 0], head: [-.2, 0, 0], rSh: [-2.95, 0, -.15], rEl: [-.1, 0, 0], lSh: [-1.2, 0, 1.0], lEl: [-.3, 0, 0], lHip: [-1.2, 0, .1], lKn: [1.7, 0, 0], rHip: [-.5, 0, -.1], rKn: [1.3, 0, 0] },
+  yukiThrow: { torso: [.25, .2, 0], head: [-.25, -.1, 0], rSh: [-1.5, 0, -.5], rEl: [-.05, 0, 0], lSh: [-1.6, 0, .7], lEl: [-.05, 0, 0], lHip: [-1.0, 0, .1], lKn: [1.2, 0, 0], rHip: [-.2, 0, -.1], rKn: [.9, 0, 0] },
+  kai: { torso: [-.02, 0, 0], head: [-.08, .1, 0], rSh: [-.5, 0, -.3], rEl: [-1.9, 0, 0], lSh: [.2, 0, .18], lEl: [-.4, 0, 0], lHip: [0, 0, .06], rHip: [.05, 0, -.05], rKn: [.05, 0, 0] },
+  kaiLift: { torso: [-.12, 0, 0], head: [-.25, 0, 0], rSh: [-2.1, 0, -.55], rEl: [-.25, 0, 0], lSh: [-2.1, 0, .55], lEl: [-.25, 0, 0], lHip: [-.1, 0, .1], rHip: [.1, 0, -.1] },
+  shion: { torso: [.15, 0, 0], head: [.35, 0, 0], rSh: [-.45, 0, .3], rEl: [-1.1, 0, 0], lSh: [-.45, 0, -.3], lEl: [-1.1, 0, 0], lHip: [0, 0, -.02], rHip: [0, 0, .02], lKn: [.12, 0, 0], rKn: [.12, 0, 0] },
+  shionReach: { torso: [.05, 0, 0], head: [-.05, 0, 0], rSh: [-1.0, 0, -.95], rEl: [-2.1, 0, 0], lSh: [-1.45, 0, .25], lEl: [-.1, 0, 0], lHip: [-.15, 0, .05], lKn: [.2, 0, 0], rHip: [.1, 0, -.02] },
+  orphe: { torso: [-.05, 0, 0], head: [.05, 0, 0], rSh: [-1.15, 0, -.4], rEl: [-.25, 0, 0], lSh: [.1, 0, .15], lEl: [-.25, 0, 0], lHip: [0, 0, .06], rHip: [.05, 0, -.05] },
+  orpheSpread: { torso: [-.12, 0, 0], head: [-.15, 0, 0], rSh: [-.55, 0, -1.55], rEl: [-.1, 0, 0], lSh: [-.55, 0, 1.55], lEl: [-.1, 0, 0], lHip: [0, 0, .08], rHip: [0, 0, -.08] }
+};
+function lerpPose(a, b, k) { const o = { hipsY: lerp(a.hipsY ?? 1, b.hipsY ?? 1, k) }; for (const n of JN) { const x = a[n] || Z3, y = b[n] || Z3; o[n] = [lerp(x[0], y[0], k), lerp(x[1], y[1], k), lerp(x[2], y[2], k)]; } return o; }
+const tweak = (p, n, d) => { const o = lerpPose(p, p, 0); o[n] = o[n].map((v, i) => v + d[i]); return o; };
+
+// ---------- world ----------
+const FOGC = V(.075, .06, .14);
+const skyMat = new THREE.ShaderMaterial({
+  side: THREE.BackSide, depthWrite: false,
+  vertexShader: 'varying vec3 vp;void main(){vp=normalize(position);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
+  fragmentShader: 'varying vec3 vp;void main(){float h=vp.y;vec3 low=vec3(.2,.1,.26);vec3 hor=vec3(.075,.06,.14);vec3 top=vec3(.01,.012,.03);vec3 c=h<0.?hor:mix(mix(hor,low,exp(-h*18.)),top,smoothstep(.0,.6,h));gl_FragColor=vec4(c,1.);}'
+});
+const sky = new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), skyMat); sky.renderOrder = -10; scene.add(sky);
+const moonRing = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, color: C3(1.2, 1.15, 1.4), blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+const moonDisc = new THREE.Sprite(new THREE.SpriteMaterial({ map: discTex, color: 0x000000, depthWrite: false, fog: false }));
+moonRing.scale.setScalar(170); moonDisc.scale.setScalar(64); moonRing.renderOrder = -9; moonDisc.renderOrder = -8; scene.add(moonRing, moonDisc);
+const MOON = V(-.3, .42, -1).normalize();
+
+const inkU = { uInkC: { value: V(0, 0, -16) }, uInkR: { value: 0 }, uWaveC: { value: V() }, uWaveR: { value: -100 }, uFogC: { value: FOGC }, uT: { value: 0 } };
+const NOISE = 'float h1(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}float n2(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h1(i),h1(i+vec2(1,0)),f.x),mix(h1(i+vec2(0,1)),h1(i+1.),f.x),f.y);}';
+const towerMat = new THREE.ShaderMaterial({
+  uniforms: inkU,
+  vertexShader: 'varying vec3 vW,vN;varying float vD;void main(){vec4 w=modelMatrix*vec4(position,1.);vW=w.xyz;vN=normalize(mat3(modelMatrix)*normal);vec4 mv=viewMatrix*w;vD=-mv.z;gl_Position=projectionMatrix*mv;}',
+  fragmentShader: `uniform vec3 uInkC,uWaveC,uFogC;uniform float uInkR,uWaveR,uT;varying vec3 vW,vN;varying float vD;${NOISE}
+  void main(){vec3 col=vec3(.03,.032,.055);float lit=0.;vec3 wc=vec3(0.);
+   if(abs(vN.y)<.5){vec2 c=abs(vN.x)>.5?vec2(vW.z,vW.y):vec2(vW.x,vW.y);vec2 g=vec2(c.x/1.15,c.y/1.55);vec2 id=floor(g),f=fract(g);
+    float win=step(.2,f.x)*step(f.x,.8)*step(.28,f.y)*step(f.y,.78);float hh=h1(id+floor(vW.xz/40.)*3.1);
+    float on=step(.68,hh)*win;wc=mix(vec3(1.25,.85,.55),vec3(.55,.85,1.4),step(.5,h1(id*1.7)));wc=mix(wc,vec3(1.3,.45,1.1),step(.9,h1(id*2.3)));
+    lit=on*(.25+.6*h1(id*3.1));col+=vec3(.02,.025,.05)*step(.9,f.x);}
+   else col=vec3(.045,.045,.07);
+   float d=length(vW.xz-uInkC.xz)+(n2(vW.xz*.08)-.5)*14.;float ink=1.-smoothstep(uInkR-4.,uInkR,d);
+   float edge=exp(-pow((d-uInkR)*.35,2.))*step(.5,uInkR);
+   float wv=exp(-pow((length(vW-uWaveC)-uWaveR)*.18,2.));
+   col+=wc*lit*(1.-ink);col=mix(col,vec3(.004,.002,.01),ink);col+=edge*vec3(1.1,.75,.25)*.7;
+   col+=wv*(vec3(.1,1.4,.55)*(.3+lit*2.));
+   float fg=smoothstep(40.,520.,vD);float hf=smoothstep(-10.,-110.,vW.y);col=mix(col,uFogC,max(fg,hf*.9));
+   gl_FragColor=vec4(col,1.);}`
+});
+const texMat = new THREE.Matrix4();
+const floorMat = new THREE.ShaderMaterial({
+  uniforms: Object.assign({ tRef: { value: rtRef.texture }, texMat: { value: texMat } }, inkU),
+  vertexShader: 'uniform mat4 texMat;varying vec4 vRef;varying vec3 vW;varying float vD;void main(){vec4 w=modelMatrix*vec4(position,1.);vW=w.xyz;vRef=texMat*w;vec4 mv=viewMatrix*w;vD=-mv.z;gl_Position=projectionMatrix*mv;}',
+  fragmentShader: `uniform sampler2D tRef;uniform vec3 uInkC,uFogC;uniform float uInkR,uT;varying vec4 vRef;varying vec3 vW;varying float vD;${NOISE}
+  void main(){vec2 p=vW.xz;vec2 off=vec2(0.);
+   for(int k=0;k<2;k++){vec2 g=p*1.1+float(k)*7.3;vec2 id=floor(g);vec2 f=fract(g)-.5;float ph=fract(uT*1.3+h1(id+float(k)*3.));vec2 c=(vec2(h1(id*1.3),h1(id*2.1))-.5)*.5;vec2 q=f-c;float r=length(q);
+    off+=q/max(r,.001)*sin((r-ph*.45)*55.)*exp(-r*9.)*(1.-ph);}
+   float pud=smoothstep(.42,.62,n2(p*.22));vec4 ru=vRef;ru.xy+=(off*.025+(vec2(n2(p*2.5),n2(p*2.5+9.))-.5)*.03*(1.-pud))*ru.w;
+   vec3 refl=texture2DProj(tRef,ru).rgb;
+   vec3 base=vec3(.022,.024,.036)*(.75+.5*n2(p*.7));vec2 tl=abs(fract(p/2.4)-.5);base*=1.-smoothstep(.47,.5,max(tl.x,tl.y))*.5;
+   float ring=abs(length(p-vec2(0.,-2.))-7.);base+=vec3(.05,.05,.06)*(1.-smoothstep(.08,.14,ring))*(1.-pud*.6);
+   vec3 col=base+refl*mix(.32,.95,pud);
+   float d=length(p-uInkC.xz)+(n2(p*.5)-.5)*2.6;float ink=1.-smoothstep(uInkR-.6,uInkR,d);float edge=exp(-pow((d-uInkR)*1.6,2.))*step(.2,uInkR);
+   col=mix(col,vec3(.003,.0,.008)+refl*.22,ink);col+=edge*vec3(1.2,.8,.3)*.8;
+   col=mix(col,uFogC,smoothstep(40.,160.,vD));gl_FragColor=vec4(col,1.);}`
+});
+const ROOF = 28;
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOF * 2, ROOF * 2), floorMat); floor.rotation.x = -PI / 2; scene.add(floor);
+const edgeMat = new THREE.LineBasicMaterial({ color: 0x050409 });
+function tower(x, z, w, d, top) { const hgt = top + 170; const m = new THREE.Mesh(new THREE.BoxGeometry(w, hgt, d), towerMat); m.position.set(x, top - hgt / 2, z); scene.add(m); return m; }
+tower(0, 0, ROOF * 2, ROOF * 2, -.02);
+const TOWERS = [];
+const neon = [];
+{
+  const r = rng(5);
+  const excl = (x, z) => (x > -90 && x < -26 && z > -26 && z < 14) || (x > -26 && x < 6 && z > 20) || (Math.abs(x) < 40 && Math.abs(z) < 40);
+  const neonCols = [C3(.3, 1.6, 2.4), C3(2.4, .35, 1.4), C3(1.4, .5, 2.6), C3(2.4, 1.3, .4), C3(.4, 2.2, 1.1)];
+  for (let gx = -200; gx <= 200; gx += 17) for (let gz = -200; gz <= 200; gz += 17) {
+    const x = gx + (r() - .5) * 6, z = gz + (r() - .5) * 6; if (excl(x, z) || r() < .18) { r(); r(); continue; }
+    const w = 8 + r() * 6, d = 8 + r() * 6, top = -12 + Math.pow(r(), 1.4) * 85;
+    tower(x, z, w, d, top); TOWERS.push({ x, z, top, w, d });
+    if (r() < .45) {
+      const face = Math.floor(r() * 4), h = 4 + r() * 9, y = top - 3 - r() * 20 - h / 2;
+      const col = neonCols[Math.floor(r() * neonCols.length)];
+      const m = new THREE.Mesh(new THREE.BoxGeometry(face < 2 ? .4 : 1.6, h, face < 2 ? 1.6 : .4), basic(col.clone()));
+      const ox = face === 0 ? w / 2 + .3 : face === 1 ? -w / 2 - .3 : (r() - .5) * w * .6, oz = face === 2 ? d / 2 + .3 : face === 3 ? -d / 2 - .3 : (r() - .5) * d * .6;
+      m.position.set(x + ox, y, z + oz); scene.add(m); neon.push({ m, base: col, seed: r() * 100 });
+    }
+  }
+  tower(-44, -22, 10, 10, 40); tower(-44, 10, 10, 10, 38); tower(-80, -6, 12, 14, 30);
+  tower(-40, 34, 12, 12, 20); tower(-58, 30, 10, 12, 26);
+}
+const bridge = new THREE.Mesh(new THREE.BoxGeometry(3, 2, 22), towerMat); bridge.position.set(-44, 34, -6); scene.add(bridge);
+{
+  const dark = toon(0x16161d);
+  const addBox = (w, h, d, x, y, z, m = dark) => { const g = new THREE.BoxGeometry(w, h, d); const b = new THREE.Mesh(g, m); b.position.set(x, y, z); b.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), edgeMat)); scene.add(b); return b; };
+  addBox(ROOF * 2, .9, .5, 0, .45, ROOF); addBox(ROOF * 2, .9, .5, 0, .45, -ROOF); addBox(.5, .9, ROOF * 2, ROOF, .45, 0); addBox(.5, .9, ROOF * 2, -ROOF, .45, 0);
+  addBox(4, 2.2, 3, 20, 1.1, 18); addBox(3, 1.6, 3, 16, .8, 21); addBox(5, 2.6, 3.5, -18, 1.3, 20); addBox(2.5, 1.4, 2.5, 22, .7, -20);
+  const tank = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 4, 20), dark); tank.position.set(-20, 3, 22); scene.add(tank);
+  addBox(.3, 14, .3, 20, 7, -22); const beacon = new THREE.Mesh(new THREE.SphereGeometry(.25, 10, 8), basic(C3(3, .3, .3))); beacon.position.set(20, 14.2, -22); scene.add(beacon); neon.push({ m: beacon, base: C3(3, .3, .3), seed: 7, blink: true });
+  const frame = (cx, cy, cz, w, h, col) => { const m = basic(col); for (const b of [[w, .18, .18, 0, h / 2], [w, .18, .18, 0, -h / 2], [.18, h, .18, -w / 2, 0], [.18, h, .18, w / 2, 0]]) { const x = new THREE.Mesh(new THREE.BoxGeometry(b[0], b[1], b[2]), m); x.position.set(cx + b[3], cy + b[4], cz); scene.add(x); } neon.push({ m: { material: m }, base: col.clone(), seed: 3 }); };
+  frame(-8, 6, -27.5, 14, 6, C3(.3, 1.5, 2.4)); frame(12, 7, -27.5, 8, 9, C3(2.4, .3, 1.2));
+  const strip = (x, z, w, d, col) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, .08, d), basic(col)); m.position.set(x, .95, z); scene.add(m); };
+  strip(0, ROOF - .3, ROOF * 2, .08, C3(.25, .7, 1.4)); strip(-ROOF + .3, 0, .08, ROOF * 2, C3(1.4, .3, .9));
+}
+const hemi = new THREE.HemisphereLight(0x5a6aa8, 0x07060c, .6); scene.add(hemi);
+const moonL = new THREE.DirectionalLight(0x9aaeff, .35); moonL.position.set(-20, 40, -30); scene.add(moonL);
+const rim = new THREE.DirectionalLight(0x39d5ff, 1.8); scene.add(rim, rim.target);
+const camL = new THREE.DirectionalLight(0xd8d4ff, .38); scene.add(camL, camL.target);
+const pl1 = new THREE.PointLight(0x39c8ff, 1.2, 40); pl1.position.set(-8, 5, -24); scene.add(pl1);
+const pl2 = new THREE.PointLight(0xff3aa0, 1.0, 40); pl2.position.set(16, 5, 20); scene.add(pl2);
+
+// traffic lights in the sky
+const traffic = [];
+{ const r = rng(41); for (let i = 0; i < 36; i++) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: r() < .5 ? C3(2.2, 1.9, 1.5) : C3(2.4, .4, .4), blending: THREE.AdditiveBlending, depthWrite: false, fog: false })); s.scale.setScalar(1.6); scene.add(s); traffic.push({ s, ax: r() < .5, off: r() * 400, spd: (20 + r() * 30) * (r() < .5 ? 1 : -1), lane: (r() - .5) * 300, y: 12 + r() * 50 }); } }
+
+// ---------- characters ----------
+const CH = { ren: buildRen(), yuki: buildYuki(), kai: buildKai(), shion: buildShion(), orphe: buildOrphe() };
+CH.yuki.root.scale.setScalar(.93); CH.kai.root.scale.setScalar(1.04); CH.shion.root.scale.setScalar(.84); CH.orphe.root.scale.setScalar(1.07);
+for (const k in CH) scene.add(CH[k].root);
+
+// ---------- effect primitives ----------
+const fxObjs = [];
+const reg = o => { o.visible = false; o.frustumCulled = false; scene.add(o); fxObjs.push(o); return o; };
+const _t = V(), _v = V(), _s = V();
+function ribbon(max, color, additive = true) {
+  const geo = new THREE.BufferGeometry(), pos = new Float32Array(max * 6), al = new Float32Array(max * 2);
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('aA', new THREE.BufferAttribute(al, 1));
+  const idx = []; for (let i = 0; i < max - 1; i++) { const a = 2 * i; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); } geo.setIndex(idx);
+  const mat = new THREE.ShaderMaterial({ uniforms: { color: { value: color.clone ? color.clone() : color }, op: { value: 1 } },
+    vertexShader: 'attribute float aA;varying float vA;void main(){vA=aA;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+    fragmentShader: 'uniform vec3 color;uniform float op;varying float vA;void main(){gl_FragColor=vec4(color,clamp(vA*op,0.,1.));}',
+    transparent: true, depthWrite: !additive, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, side: THREE.DoubleSide });
+  const m = reg(new THREE.Mesh(geo, mat));
+  m.draw = (pts, wFn, aFn, op = 1) => {
+    const n = Math.min(pts.length, max); if (n < 2) return; m.visible = true; mat.uniforms.op.value = op;
+    for (let i = 0; i < n; i++) {
+      const p = pts[i]; _t.copy(pts[Math.min(i + 1, n - 1)]).sub(pts[Math.max(i - 1, 0)]); _v.copy(camera.position).sub(p);
+      _s.crossVectors(_t, _v).normalize().multiplyScalar(wFn(i / (n - 1)) * .5);
+      pos.set([p.x - _s.x, p.y - _s.y, p.z - _s.z, p.x + _s.x, p.y + _s.y, p.z + _s.z], i * 6);
+      const a = aFn(i / (n - 1)); al[i * 2] = al[i * 2 + 1] = a;
+    }
+    geo.setDrawRange(0, (n - 1) * 6); geo.attributes.position.needsUpdate = true; geo.attributes.aA.needsUpdate = true;
+  };
+  return m;
+}
+function burst({ n, color, seed, speed, life, grav = -9, size = .05, bias = V() }) {
+  const r = rng(seed), vel = [], lf = []; for (let i = 0; i < n; i++) { const u = r() * 2 - 1, th = r() * TAU, s = Math.sqrt(1 - u * u); vel.push(V(s * Math.cos(th), u, s * Math.sin(th)).add(bias).multiplyScalar(lerp(speed[0], speed[1], r()))); lf.push(lerp(life[0], life[1], r())); }
+  const geo = new THREE.BufferGeometry(), arr = new Float32Array(n * 3); geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+  const o = reg(new THREE.Points(geo, new THREE.PointsMaterial({ color, map: glowTex, size, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false })));
+  const maxL = Math.max(...lf);
+  o.fire = (dt, c) => { if (dt < 0 || dt > maxL) return; o.visible = true; for (let i = 0; i < n; i++) { const v = vel[i]; arr.set(dt < lf[i] ? [c.x + v.x * dt, Math.max(.01, c.y + v.y * dt + .5 * grav * dt * dt), c.z + v.z * dt] : [0, -999, 0], i * 3); } geo.attributes.position.needsUpdate = true; o.material.opacity = 1 - dt / maxL * .7; };
+  return o;
+}
+const ringMesh = (col, inner = .93) => reg(new THREE.Mesh(new THREE.RingGeometry(inner, 1, 96), addB(col)));
+function placeRing(m, p, radius, op, flat, lookDir) { m.visible = op > .001; m.position.copy(p); m.scale.setScalar(Math.max(.001, radius)); m.material.opacity = op; if (flat) m.rotation.set(-PI / 2, 0, 0); else if (lookDir) m.lookAt(p.clone().add(lookDir)); else m.quaternion.copy(camera.quaternion); }
+
+// Ren: rings
+const renRings = [];
+for (let i = 0; i < 6; i++) {
+  const g = new THREE.Group();
+  part(g, new THREE.TorusGeometry(.3, .036, 10, 48), toon(0x0a0a0f), null, null, null, true);
+  g.add(new THREE.Mesh(new THREE.TorusGeometry(.33, .01, 6, 64), basic(C3(.4, 1.9, 2.6))));
+  g.add(new THREE.Mesh(new THREE.TorusGeometry(.27, .006, 6, 64), basic(C3(.3, 1.4, 2.0))));
+  reg(g); renRings.push(g);
+}
+const ringTrails = renRings.map(() => ribbon(16, C3(.35, 1.6, 2.4)));
+function ringPos(i, lt, c, mode) {
+  const a0 = i / 6 * TAU;
+  if (mode === 'orbit' || lt < .55) { const a = a0 + lt * 1.9; return V(c.x + Math.cos(a) * 1.05, c.y + 1.1 + Math.sin(i * 2.1 + lt * 2.2) * .38, c.z + Math.sin(a) * 1.05); }
+  const k = lt - .55, a = a0 + .55 * 1.9 + k * 3.2, R = 1.05 + eOutC(clamp(k / .75)) * 14;
+  return V(c.x + Math.cos(a) * R, c.y + 1.1 + Math.sin(i * 2.1) * .38 + k * 4 * Math.sin(i * 1.3 + .5), c.z + Math.sin(a) * R);
+}
+function drawRings(c, lt, mode, appearT = 0) {
+  renRings.forEach((g, i) => {
+    const s = mode === 'orbit' ? 1 : eOutBack(clamp((lt - appearT - i * .05) / .35));
+    if (s <= 0.001) return; g.visible = true; g.position.copy(ringPos(i, lt, c, mode)); g.scale.setScalar(s);
+    g.rotation.set(PI / 2 + Math.sin(i * 1.7) * .6, Math.cos(i) * .4, lt * (mode === 'orbit' ? 2 : 9) + i);
+    if (mode !== 'orbit' && lt > .5) { const pts = []; for (let k = 0; k < 16; k++) pts.push(ringPos(i, Math.max(0, lt - k * .018), c, mode)); ringTrails[i].draw(pts, f => .3 * (1 - f), f => (1 - f) * .9); }
+  });
+}
+// Yuki: wires & billboard
+const wires = Array.from({ length: 8 }, () => ribbon(56, C3(2.6, .18, .35)));
+function helixWires(c, lt, scale = 1, count = 6) {
+  for (let i = 0; i < count; i++) { const pts = []; for (let s = 0; s <= 1.0001; s += 1 / 50) { const a = s * TAU * 1.35 + lt * (2.2 + i * .35) + i * 1.05, r = (.42 + .38 * Math.sin(s * PI) + i * .03) * scale; pts.push(V(c.x + Math.cos(a) * r, c.y + (.05 + s * 2.1) * scale, c.z + Math.sin(a) * r)); } wires[i].draw(pts, () => .016, f => Math.sin(f * PI) * .95); }
+}
+function lineWire(w, a, b, prog, width = .03) { if (prog <= 0) return; const pts = []; for (let k = 0; k <= 10; k++) pts.push(a.clone().lerp(b, k / 10 * prog)); w.draw(pts, () => width, f => .4 + .6 * f); }
+const billboard = new THREE.Group(); billboard.position.set(-73.5, 18, -6); billboard.rotation.y = PI / 2; scene.add(billboard);
+const bHalves = [0, 1].map(k => {
+  const g = new THREE.Group(); billboard.add(g); const y = k ? -1.25 : 1.25;
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(10, 2.5, .3), toon(0x0c0c14)); panel.position.y = y; g.add(panel);
+  const nm = basic(C3(2.4, .35, 1.3));
+  for (const b of [[10, .12, 0, k ? -2.44 : 2.44], [.12, 2.5, -5, y], [.12, 2.5, 5, y]]) { const x = new THREE.Mesh(new THREE.BoxGeometry(b[0], b[1], .1), nm); x.position.set(b[2], b[3], .2); g.add(x); }
+  for (let i = 0; i < 5; i++) { const x = new THREE.Mesh(new THREE.BoxGeometry(.9 + (i * 37 % 5) * .3, .22, .05), basic(C3(.5, .9 + i * .1, 2.2))); x.position.set(-3.6 + i * 1.8, y + (k ? .3 : -.3), .2); g.add(x); }
+  return g;
+});
+const bSparks = burst({ n: 90, color: C3(2.5, .5, 1.2), seed: 61, speed: [3, 12], life: [.4, 1], grav: -12, size: .18 });
+// Kai: crystals, cars, rubble, gravity rings
+const crystals = [];
+{ const edgeM = new THREE.LineBasicMaterial({ color: C3(1.2, .7, 2.6) }); for (let i = 0; i < 18; i++) { const g = new THREE.OctahedronGeometry(.16 + (i % 3) * .06); g.scale(1, 1.8, 1); const m = new THREE.Mesh(g, toon(0x251245)); m.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), edgeM)); crystals.push(reg(m)); } }
+function drawCrystals(c, lt, spread = 1) {
+  crystals.forEach((m, i) => { m.visible = true; const a = i * 2.39 + lt * .7 * (i % 2 ? 1 : -1), r = (1.1 + (i % 5) * .35) * spread; m.position.set(c.x + Math.cos(a) * r, c.y + .4 + ((i * 7) % 11) / 11 * 2.4 * spread + Math.sin(lt * 1.6 + i) * .12, c.z + Math.sin(a) * r); m.rotation.set(lt * .8 + i, lt * 1.3 + i * 2, 0); });
+}
+function makeCar(col) {
+  const g = new THREE.Group(); part(g, new THREE.BoxGeometry(1.9, .55, 4.3), toon(col), [0, .6, 0]); part(g, new THREE.BoxGeometry(1.65, .5, 2.1), toon(0x0b0c12), [0, 1.12, -.25]);
+  for (const x of [-.92, .92]) for (const z of [-1.4, 1.4]) part(g, new THREE.CylinderGeometry(.36, .36, .28, 14), toon(0x060608), [x, .36, z], [0, 0, PI / 2]);
+  for (const x of [-.62, .62]) { const hl = new THREE.Mesh(new THREE.BoxGeometry(.42, .12, .03), basic(C3(2.6, 2.4, 2))); hl.position.set(x, .66, 2.16); g.add(hl); const tl = new THREE.Mesh(new THREE.BoxGeometry(.42, .1, .03), basic(C3(2.4, .2, .25))); tl.position.set(x, .7, -2.16); g.add(tl); }
+  scene.add(g); return g;
+}
+const KAI = V(10, 0, -6);
+const cars = [[14.5, -11, .3, 0x2b2f3a], [7.5, -12.5, -.2, 0x4a1622], [16.5, -5, 1.4, 0x1d2a33], [4, -9.5, .9, 0x33313a]].map(([x, z, r, c]) => ({ g: makeCar(c), x, z, r }));
+const rubble = []; { const r = rng(77); for (let i = 0; i < 22; i++) { const s = .25 + r() * .55; const m = new THREE.Mesh(new THREE.DodecahedronGeometry(s), toon(0x2c2c35)); m.add(new THREE.Mesh(m.geometry, OUT)); const a = r() * TAU, d = 2 + r() * 6; m.userData = { x: KAI.x + Math.cos(a) * d, z: KAI.z + Math.sin(a) * d - 2, s, h: 2 + r() * 5, sp: r() }; m.position.set(m.userData.x, s * .6, m.userData.z); scene.add(m); rubble.push(m); } }
+const gRings = [0, 1, 2].map(() => ringMesh(C3(1.3, .6, 2.6), .95));
+// Shion: bars, sound rings, wave ribbons
+const bars = []; { const g = new THREE.BoxGeometry(.03, 1, .03); g.translate(0, .5, 0); const m = basic(C3(.35, 2.2, .9)); for (let i = 0; i < 44; i++) bars.push(reg(new THREE.Mesh(g, m))); }
+function drawBars(c, t, r = 1.05, amp = 1) { bars.forEach((b, i) => { const a = i / bars.length * TAU; b.visible = true; b.position.set(c.x + Math.cos(a) * r, c.y + .25, c.z + Math.sin(a) * r); b.scale.y = (.06 + .55 * Math.abs(Math.sin(t * 9 + i * .7) * Math.sin(t * 3.1 + i * .37))) * amp; }); }
+const sRings = Array.from({ length: 8 }, () => ringMesh(C3(.35, 2.3, 1.0), .965));
+const waveRib = [0, 1, 2].map(() => ribbon(80, C3(.35, 2.3, 1.0)));
+// Orphe: halo, tendrils
+const halo = new THREE.Group(); reg(halo);
+halo.add(new THREE.Mesh(new THREE.TorusGeometry(1.05, .014, 6, 120), basic(C3(2.2, 1.6, .6))));
+halo.add(new THREE.Mesh(new THREE.TorusGeometry(.82, .006, 6, 120), basic(C3(1.8, 1.3, .5))));
+for (let i = 0; i < 16; i++) { const a = i / 16 * TAU, l = i % 4 ? .12 : .32; const s = new THREE.Mesh(new THREE.BoxGeometry(.012, l, .012), basic(C3(2.2, 1.6, .6))); s.position.set(Math.cos(a) * (1.05 + l / 2), Math.sin(a) * (1.05 + l / 2), 0); s.rotation.z = a - PI / 2; halo.add(s); }
+const tendrils = Array.from({ length: 22 }, () => ribbon(26, C3(.006, .0, .014), false));
+function tendril(k, base, lt, grow, H = 3, W = .3) {
+  if (grow <= .01) return; const pts = [];
+  for (let i = 0; i < 26; i++) { const s = i / 25 * grow; pts.push(V(base.x + Math.sin(s * 3.2 + k * 1.7 + lt * 1.3) * .6 * s * W * 3, base.y + s * H, base.z + Math.cos(s * 2.6 + k + lt) * .6 * s * W * 3)); }
+  tendrils[k].draw(pts, f => W * Math.pow(1 - f, 1.3) + .01, () => 1);
+}
+// rain & splashes
+const RAIN_N = 2600;
+const rain = (() => {
+  const r = rng(91), base = []; for (let i = 0; i < RAIN_N; i++) base.push([r() * 60, r() * 50, r() * 60, 14 + r() * 8]);
+  const geo = new THREE.BufferGeometry(), arr = new Float32Array(RAIN_N * 6); geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+  const o = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: C3(.45, .55, .8), transparent: true, opacity: .55, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+  o.layers.set(1); o.frustumCulled = false; scene.add(o);
+  o.fire = (t, cp, slow = 1) => { for (let i = 0; i < RAIN_N; i++) { const b = base[i]; const x = cp.x + mod(b[0] - cp.x, 60) - 30, z = cp.z + mod(b[2] - cp.z, 60) - 30, y = cp.y + 25 - mod(b[1] + t * b[3] * slow - cp.y, 50); const L = .5 * slow + .05; arr.set([x, y, z, x + .06 * L, y + L, z + .02 * L], i * 6); } geo.attributes.position.needsUpdate = true; };
+  return o;
+})();
+const splash = (() => {
+  const r = rng(92), n = 450, p = new Float32Array(n * 3), ph = new Float32Array(n); for (let i = 0; i < n; i++) { p.set([(r() - .5) * 54, .02, (r() - .5) * 54], i * 3); ph[i] = r(); }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(p, 3)); geo.setAttribute('aPh', new THREE.BufferAttribute(ph, 1));
+  const m = new THREE.ShaderMaterial({ uniforms: { uT: { value: 0 }, uS: { value: 300 }, uInkC: inkU.uInkC, uInkR: inkU.uInkR }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: 'attribute float aPh;uniform float uT,uS,uInkR;uniform vec3 uInkC;varying float vA;void main(){float f=fract(uT*1.7+aPh);vA=(1.-f)*step(uInkR,length(position.xz-uInkC.xz));vec4 mv=modelViewMatrix*vec4(position,1.);gl_PointSize=(1.+f*7.)*uS/max(-mv.z,.5);gl_Position=projectionMatrix*mv;}',
+    fragmentShader: 'varying float vA;void main(){vec2 c=gl_PointCoord-.5;c.y*=2.2;float r=length(c)*2.;float ring=smoothstep(.7,.85,r)*(1.-smoothstep(.9,1.,r));gl_FragColor=vec4(vec3(.55,.7,1.1),ring*vA*.3);}' });
+  const o = new THREE.Points(geo, m); o.frustumCulled = false; o.layers.set(1); scene.add(o); return o;
+})();
+const drops = burst({ n: 70, color: C3(.8, 1, 1.5), seed: 93, speed: [.8, 2.6], life: [.3, .7], grav: -9, size: .025, bias: V(0, .9, 0) });
+const splashRing = ringMesh(C3(.8, 1.0, 1.5), .9);
+const dust = burst({ n: 120, color: C3(1.2, 1.1, 1.3), seed: 95, speed: [1, 4], life: [.5, 1.2], grav: -3, size: .06, bias: V(0, .4, 0) });
+
+// ---------- shot helpers ----------
+let S;
+function newState() { return { flash: 0, flashC: V(1, 1, 1), fade: 0, ab: .002, lens: null, lensS: 0, bloom: 1, tint: V(1, 1, 1), rimC: 0x39d5ff, rimI: 1.8, subj: V(), fx: { radial: 0, rc: null, rcol: '255,255,255', hl: 0, glint: null }, title: 0, rainSlow: 1 }; }
+function cam(p, l, fov, roll = 0, shake = 0) {
+  camera.fov = fov; camera.updateProjectionMatrix(); camera.position.copy(p);
+  camera.up.set(Math.sin(roll), Math.cos(roll), 0); camera.lookAt(l);
+  if (shake > 0 && !RM) { const r = rng(Math.floor(T * 30) + 5); camera.position.add(V((r() - .5) * shake, (r() - .5) * shake, (r() - .5) * shake)); camera.rotation.z += (r() - .5) * shake * .2; }
+  camera.updateMatrixWorld(); S.subj.copy(l);
+}
+const head = (f, off = V(0, .1, .06)) => { f.root.updateMatrixWorld(true); return f.j.head.localToWorld(off.clone()); };
+const REN = V(0, 0, 0), YUKI = V(-24.5, 0, -6), SHION = V(-10, 0, 6), ORPHE = V(0, 0, -16);
+const A = V(-44, 33, -6), L = 30;
+
+const CUTS = [
+  { id: 'C01', name: '雨の都市', col: 'none', a: 0, b: 1.3, f(lt, u, t) {
+    cam(V().lerpVectors(V(78, 118, 105), V(44, 78, 62), eInOut(u)), V(-2, 2, 0), 40, -.04);
+    S.rimC = 0x8a7dff; S.bloom = 1.15;
+  } },
+  { id: 'C02', name: '足元', col: 'ren', a: 1.3, b: 2.1, f(lt, u, t) {
+    const k = eInC(clamp(lt / .32)); const f = CH.ren;
+    show(f, REN.x, 0, REN.z, .5, P.renStepDown, t); f.root.updateMatrixWorld(true); const foot = f.j.rFoot.getWorldPosition(V()); foot.y = .06;
+    show(f, REN.x, 0, REN.z, .5, lerpPose(P.renStepUp, P.renStepDown, k), t);
+    const dx = V(Math.cos(.5 + .9), 0, -Math.sin(.5 + .9));
+    cam(foot.clone().add(V(1.25 - lt * .2, .13, .95)), foot.clone().add(V(0, .16, 0)), 30, 0, lt > .32 ? .015 * Math.exp(-(lt - .32) * 8) : 0);
+    drops.fire(lt - .32, foot); if (lt > .32) placeRing(splashRing, V(foot.x, .02, foot.z), .05 + eOutC(clamp((lt - .32) / .45)) * .6, (1 - clamp((lt - .32) / .45)) * .9, true);
+    S.rimC = 0x39d5ff; S.rainSlow = .5;
+  } },
+  { id: 'C03', name: 'レン', col: 'ren', a: 2.1, b: 3.0, f(lt, u, t) {
+    const f = CH.ren; f.eyeOpen = lerp(.12, 1, eOutC(clamp((lt - .22) / .2)));
+    show(f, REN.x, 0, REN.z, 0, tweak(P.renPocket, 'head', [lerp(.12, 0, u), 0, 0]), t);
+    const hp = head(f, V(0, .1, 0));
+    cam(hp.clone().add(V(.09, .0, lerp(.52, .4, eOutC(u)))), hp.clone().add(V(.01, 0, 0)), 30);
+    S.rimC = 0x39d5ff; S.rimI = 2.2;
+  } },
+  { id: 'C04', name: '黒環', col: 'ren', a: 3.0, b: 4.3, f(lt, u, t) {
+    const f = CH.ren; f.eyeOpen = 1;
+    show(f, REN.x, 0, REN.z, 0, lerpPose(P.renPocket, P.renSweep, eOutC(clamp((lt - .42) / .16))), t, 1.5);
+    const a = lerp(.7, -1.5, eInOut(u)), r = lerp(3.0, 4.6, u);
+    cam(V(Math.sin(a) * r, lerp(1.0, 1.9, u), Math.cos(a) * r), V(0, 1.2, 0), 46, 0, lt > .55 ? .08 * Math.exp(-(lt - .55) * 5) : 0);
+    drawRings(REN, lt, 'attack', .02);
+    if (lt > .55) { const d = lt - .55; S.flash = .22 * Math.exp(-d * 14); S.flashC = V(.5, .9, 1.2); S.fx.radial = .7 * Math.exp(-d * 3); S.fx.rc = V(0, 1.2, 0); S.fx.rcol = '120,225,255'; S.ab = .002 + .01 * Math.exp(-d * 5); }
+    S.rimC = 0x39d5ff; S.rimI = 2.4;
+  } },
+  { id: 'C05', name: 'ユキ', col: 'yuki', a: 4.3, b: 5.2, f(lt, u, t) {
+    const f = CH.yuki, ry = 1.0; show(f, YUKI.x, 0, YUKI.z, ry, P.yuki, t, 1.2);
+    const a = lerp(ry - 1.0, ry + .35, eInOut(u)), r = lerp(3.0, 1.6, eInOut(u)), c = YUKI;
+    const look = c.clone().add(V(0, lerp(1.05, 1.5, eInOut(u)), 0));
+    cam(V(c.x + Math.sin(a) * r, lerp(.8, 1.55, eInOut(u)), c.z + Math.cos(a) * r), look, lerp(42, 34, u));
+    helixWires(c, lt + 4, .93);
+    S.rimC = 0xff2d4b; S.rimI = 2.4;
+  } },
+  { id: 'C06', name: '紅糸', col: 'yuki', a: 5.2, b: 6.3, f(lt, u, t) {
+    const f = CH.yuki; let p, pose;
+    const th0 = Math.asin((YUKI.x - A.x) / L);
+    if (lt < .14) { p = YUKI.clone().lerp(V(A.x + L * Math.sin(th0), A.y - L * Math.cos(th0), -6), eOutC(lt / .14)); pose = lerpPose(P.yuki, P.yukiSwing, lt / .14); }
+    else { const th = lerp(th0, -.72, eInOut(clamp((lt - .14) / .96))); p = V(A.x + L * Math.sin(th), A.y - L * Math.cos(th), -6); pose = lt > .5 ? lerpPose(P.yukiSwing, P.yukiThrow, eOutC(clamp((lt - .5) / .12))) : P.yukiSwing; }
+    show(f, p.x, p.y - .9, p.z, -PI / 2, pose, t, 2);
+    f.root.updateMatrixWorld(true); const hand = f.j.rEl.localToWorld(V(0, -.29, 0)), handL = f.j.lEl.localToWorld(V(0, -.29, 0));
+    cam(p.clone().add(V(lerp(3.4, 1.0, u), lerp(.6, .1, u), 4.4)), p.clone().add(V(-2.8 * u - .4, -.35, 0)), 50, .06, lt > .82 ? .25 * Math.exp(-(lt - .82) * 5) : 0);
+    lineWire(wires[0], hand, lt < .5 ? A : A.clone().lerp(hand, clamp((lt - .5) / .1)), lt < .6 ? 1 : 0, .035);
+    const tgts = [V(-73.2, 20.4, -11), V(-73.2, 15.6, -1), V(-73.2, 18.3, -12), V(-73.2, 17.4, 0), V(-73.2, 19.8, -2)];
+    tgts.forEach((g, i) => { const pr = clamp((lt - .5 - i * .035) / .2); const tip = g.clone().add(g.clone().sub(handL).multiplyScalar(.25 * clamp((lt - .78) / .2))); lineWire(wires[i + 1], handL, tip, pr, .03); });
+    const sk = eOutC(clamp((lt - .8) / .3)); bHalves[0].position.set(0, sk * 1.2, sk * .8); bHalves[0].rotation.z = sk * .16; bHalves[1].position.set(0, -sk * 1.8, -sk * .5); bHalves[1].rotation.z = -sk * .1;
+    bSparks.fire(lt - .8, V(-73, 18, -6));
+    if (lt > .8) { const d = lt - .8; S.flash = .3 * Math.exp(-d * 12); S.flashC = V(1.2, .3, .4); S.fx.radial = .8 * Math.exp(-d * 3); S.fx.rc = V(-73, 18, -6); S.fx.rcol = '255,70,100'; }
+    S.fx.hl = .55 * (1 - u * .5); S.rimC = 0xff2d4b; S.rimI = 2.4;
+  } },
+  { id: 'C07', name: 'カイ', col: 'kai', a: 6.3, b: 7.2, f(lt, u, t) {
+    const f = CH.kai; show(f, KAI.x, 0, KAI.z, 0, P.kai, t, .8);
+    cam(V().lerpVectors(V(10.75, .32, -3.1), V(10.45, .7, -3.55), eInOut(u)), V(10, 1.75, -6), 38);
+    drawCrystals(KAI, lt + 6, 1);
+    const g = head(f, V(.045, .105, .12)); if (lt > .45 && lt < .8) S.fx.glint = { p: g, k: Math.sin((lt - .45) / .35 * PI), col: '190,140,255' };
+    S.rimC = 0xb08bff; S.rimI = 3.4;
+  } },
+  { id: 'C08', name: '重力', col: 'kai', a: 7.2, b: 8.4, f(lt, u, t) {
+    const f = CH.kai; show(f, KAI.x, 0, KAI.z, 0, lerpPose(P.kai, P.kaiLift, eOutC(clamp(lt / .3))), t, 1.2);
+    cam(V().lerpVectors(V(3.2, .55, 3), V(4.6, 1.2, 1.4), eInOut(u)), V(11, 2.7, -8), 56, -.05, .05);
+    cars.forEach((c, i) => { const k = eOutC(clamp((lt - .15 - i * .08) / .85)); c.g.position.set(c.x, k * (3 + i * 1.1) + Math.sin(t * 2 + i) * .12 * k, c.z); c.g.rotation.set(k * .35 * Math.sin(i * 2.1), c.r + k * .25 * Math.cos(i), k * .3 * Math.cos(i * 1.3)); });
+    rubble.forEach(m => { const d = m.userData, k = eOutC(clamp((lt - .1 - d.sp * .4) / .8)); m.position.set(d.x, d.s * .6 + k * d.h, d.z); m.rotation.set(k * 2 * d.sp, k * 3 * d.sp, 0); });
+    drawCrystals(KAI, lt + 7, 1 + eOutC(clamp(lt / .8)) * .8);
+    gRings.forEach((m, i) => { const ph = mod(lt * 1.1 + i / 3, 1); placeRing(m, V(KAI.x, .04, KAI.z), .5 + ph * 9, (1 - ph) * .9, true); });
+    f.root.updateMatrixWorld(true); const hand = f.j.rEl.localToWorld(V(0, -.29, 0)).lerp(f.j.lEl.localToWorld(V(0, -.29, 0)), .5).add(V(0, .6, 0));
+    S.lens = hand; S.lensS = .05 + .03 * Math.sin(lt * 9); S.ab = .006; S.tint = V(1.04, .96, 1.1);
+    dust.fire(lt - .1, V(KAI.x, .1, KAI.z));
+    S.rimC = 0x9b6bff; S.rimI = 2.6;
+  } },
+  { id: 'C09', name: 'シオン', col: 'shion', a: 8.4, b: 9.2, f(lt, u, t) {
+    const f = CH.shion; f.eyeOpen = 1; show(f, SHION.x, 0, SHION.z, 0, tweak(P.shion, 'head', [-.42 * eOutC(clamp((lt - .15) / .4)), 0, 0]), t, .6);
+    const hp = head(f, V(0, .1, 0));
+    cam(hp.clone().add(V(.18, -.02, lerp(.95, .7, eOutC(u)))), hp.clone().add(V(0, -.02, 0)), 30);
+    drawBars(SHION, t, .9, .84);
+    sRings.slice(0, 4).forEach((m, i) => { const ph = mod(lt * 1.4 + i / 4, 1); placeRing(m, hp.clone().add(V(0, 0, ph * .8)), .2 + ph * 1.6, (1 - ph) * .8, false, V(0, 0, 1)); });
+    S.rimC = 0x58ff9a; S.rimI = 2.4;
+  } },
+  { id: 'C10', name: '音波', col: 'shion', a: 9.2, b: 10.3, f(lt, u, t) {
+    const f = CH.shion; show(f, SHION.x, 0, SHION.z, 0, lerpPose(P.shion, P.shionReach, eOutC(clamp(lt / .2))), t, 1);
+    const R = 2 + lt * 64, hp = head(f, V(0, .1, 0));
+    const fly = eInC(clamp((lt - .22) / .88));
+    const cp = V(SHION.x - .5 + Math.sin(lt * 3) * 2 * fly, 1.7 + fly * 10, SHION.z - 2.4 + fly * 72);
+    cam(cp, cp.clone().add(V(0, -.12 - fly * .1, 1).multiplyScalar(10)), lerp(50, 72, fly), Math.sin(lt * 2.5) * .12 * fly);
+    drawBars(SHION, t, .9, .84);
+    sRings.forEach((m, i) => { const z = R - i * 5; if (z < .5) return; placeRing(m, V(SHION.x, 1.6 + z * .08, SHION.z + z), 1 + z * .14, .9 * (1 - i / 8), false, V(0, 0, 1)); });
+    waveRib.forEach((w, i) => { const pts = []; for (let k = 0; k < 80; k++) { const z = R - 34 + k * .45; if (z < .6) continue; const env = Math.sin(k / 79 * PI); pts.push(V(SHION.x + (i - 1) * 2.2 + Math.sin(z * .25 + i) * .6, 1.5 + z * .08 + i * .9 + Math.sin(z * .9 + i * 2 - lt * 12) * 1.3 * env, SHION.z + z)); } w.draw(pts, () => .09, g => Math.sin(g * PI) * .95); });
+    inkU.uWaveC.value.copy(hp); inkU.uWaveR.value = R;
+    S.fx.radial = .35 * fly; S.fx.rc = cp.clone().add(V(0, 0, 30)); S.fx.rcol = '120,255,170'; S.ab = .002 + .006 * fly;
+    S.rimC = 0x58ff9a; S.rimI = 2.2;
+  } },
+  { id: 'C11', name: 'オルフェ', col: 'orphe', a: 10.3, b: 11.3, f(lt, u, t) {
+    const f = CH.orphe; show(f, ORPHE.x, 0, ORPHE.z, 0, lerpPose(P.orphe, P.orphe, 0), t, 1.4);
+    cam(V().lerpVectors(V(.95, .42, -11.4), V(.55, .75, -12.7), eInOut(u)), V(0, 1.72, -16), 36);
+    halo.visible = true; halo.position.set(0, 1.95, -16.45); halo.rotation.set(0, 0, lt * .25); halo.scale.setScalar(eOutC(clamp(lt / .5)));
+    inkU.uInkC.value.copy(ORPHE); inkU.uInkR.value = 1.5 + lt * 2.4;
+    for (let k = 0; k < 10; k++) { const a = k / 10 * TAU + .3, d = 1.4 + (k % 3) * .7; tendril(k, V(ORPHE.x + Math.cos(a) * d, 0, ORPHE.z + Math.sin(a) * d * .8 - .4), lt + 10, eOutC(clamp((lt - k * .05) / .7)), 1.8 + (k % 4) * .6, .22); }
+    S.rimC = 0xe6b650; S.rimI = 2.2; S.tint = V(1.05, 1, .95);
+  } },
+  { id: 'C12', name: '侵蝕', col: 'orphe', a: 11.3, b: 12.5, f(lt, u, t) {
+    const f = CH.orphe; show(f, ORPHE.x, 0, ORPHE.z, 0, lerpPose(P.orphe, P.orpheSpread, eOutC(clamp(lt / .3))), t, 1.6);
+    cam(V().lerpVectors(V(-4, 8, -26), V(-2, 13, -24.5), eInOut(u)), V(0, 0, 0), 56, .03);
+    halo.visible = true; halo.position.set(0, 1.95, -16.45); halo.rotation.set(0, 0, lt * .25 + .25);
+    const R = 5 + eInC(clamp(u * 1.05)) * 260; inkU.uInkC.value.copy(ORPHE); inkU.uInkR.value = R;
+    for (let k = 0; k < 6; k++) { const a = k / 6 * TAU; tendril(k, V(ORPHE.x + Math.cos(a) * 2, 0, ORPHE.z + Math.sin(a) * 2), lt, 1, 3 + k % 3, .35); }
+    TOP_T.forEach((tw, i) => { const g = clamp((R - tw.d) / 30); tendril(6 + i, V(tw.x, tw.top, tw.z), lt + i, eOutC(g), 14 + (i % 4) * 6, 2.2); });
+    S.tint = V(.95, .92, 1.05); S.rimC = 0xe6b650;
+  } },
+  { id: 'C13', name: '対峙', col: 'none', a: 12.5, b: 13.9, f(lt, u, t) {
+    const side = [[CH.yuki, -2.5, -1.1, P.yuki], [CH.ren, -.8, -2.0, P.renSweep], [CH.kai, 1.3, -1.6, P.kai], [CH.shion, 2.9, -.8, P.shionReach]];
+    for (const [f, x, z, p] of side) { f.eyeOpen = 1; show(f, x, 0, z, PI, p, t, 1.3); }
+    show(CH.orphe, -.9, 0, -8.6, 0, P.orpheSpread, t, 1.6);
+    cam(V().lerpVectors(V(1.3, 1.35, -12.6), V(.8, 1.85, -11.6), eInOut(u)), V(1.3, 1.2, -1.4), lerp(40, 35, u), 0, lt > 1.2 ? .1 : 0);
+    drawRings(V(-.8, 0, -2.0), lt + 3, 'orbit');
+    helixWires(V(-2.5, 0, -1.1), lt, .93, 4);
+    drawCrystals(V(1.3, 0, -1.6), lt, .6);
+    drawBars(V(2.9, 0, -.8), t, .9, .84);
+    halo.visible = true; halo.position.set(-.9, 2.05, -9.05); halo.rotation.set(0, 0, lt * .3); halo.scale.setScalar(1.07);
+    inkU.uInkC.value.set(-.9, 0, -8.6); inkU.uInkR.value = 6.5 + lt;
+    for (let k = 0; k < 10; k++) { const a = k / 10 * TAU, d = 1.6 + (k % 3) * .9; tendril(k, V(-.9 + Math.cos(a) * d, 0, -8.6 + Math.sin(a) * d * .8 - .8), lt + 3, 1, 2 + (k % 4) * .7, .25); }
+    S.flash = sstep(1.18, 1.4, lt); S.flashC = V(1, 1, 1.05); S.rimC = 0xd8d4ff; S.rimI = 2.2; S.ab = .003; S.bloom = .8;
+  } },
+  { id: 'C14', name: 'タイトル', col: 'none', a: 13.9, b: 15, f(lt) {
+    cam(V(0, 5, 20), V(0, 5, 0), 40); S.fade = 1; S.title = lt;
+  } }
+];
+const TOP_T = (() => { const out = []; const sorted = TOWERS.filter(w => w.z > -10 && w.top > 5).map(w => Object.assign({ d: Math.hypot(w.x - ORPHE.x, w.z - ORPHE.z) }, w)).sort((a, b) => a.d - b.d); for (let i = 0; i < sorted.length && out.length < 16; i += 2) out.push(sorted[i]); return out; })();
+const cutAt = t => CUTS.find(c => t < c.b) || CUTS[CUTS.length - 1];
+
+// ---------- overlay (speed lines, glints, title) ----------
+const titleEl = document.getElementById('title');
+const _p = V();
+function toScreen(v) { _p.copy(v).project(camera); return [(_p.x + 1) / 2 * fxc.width, (1 - _p.y) / 2 * fxc.height]; }
+function drawFX(fx, t) {
+  const W = fxc.width, H = fxc.height, frame = Math.floor(t * 24);
+  ctx.clearRect(0, 0, W, H);
+  if (fx.hl > 0) { const r = rng(frame * 7 + 3); ctx.fillStyle = '#fff'; for (let i = 0; i < 60 * fx.hl; i++) { const y = r() * H, len = W * (.2 + r() * .6), x = r() * W * 1.2 - len * .3; ctx.globalAlpha = (.12 + r() * .35) * fx.hl; ctx.fillRect(x, y, len, (.5 + r() * 2) * PR); } ctx.globalAlpha = 1; }
+  if (fx.radial > 0 && fx.rc) {
+    const [cx, cy] = toScreen(fx.rc), R = Math.hypot(W, H), r = rng(frame * 13 + 1);
+    ctx.fillStyle = `rgba(${fx.rcol},${(.55 * fx.radial).toFixed(3)})`; ctx.beginPath();
+    for (let i = 0; i < 110; i++) { const a = r() * TAU, w = .002 + r() * .008, r0 = R * (.22 + r() * .22 + (1 - fx.radial) * .2); ctx.moveTo(cx + Math.cos(a - w) * R, cy + Math.sin(a - w) * R); ctx.lineTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0); ctx.lineTo(cx + Math.cos(a + w) * R, cy + Math.sin(a + w) * R); }
+    ctx.fill();
+  }
+  if (fx.glint) {
+    const [gx, gy] = toScreen(fx.glint.p), s = fx.glint.k * H * .08;
+    ctx.fillStyle = '#fff'; ctx.shadowColor = `rgb(${fx.glint.col})`; ctx.shadowBlur = 18 * PR; ctx.beginPath();
+    for (let i = 0; i < 4; i++) { const a = i * PI / 2 + .25, m = i % 2 ? .55 : 1; ctx.moveTo(gx, gy); ctx.lineTo(gx + Math.cos(a + .1) * s * .12, gy + Math.sin(a + .1) * s * .12); ctx.lineTo(gx + Math.cos(a) * s * m, gy + Math.sin(a) * s * m); ctx.lineTo(gx + Math.cos(a - .1) * s * .12, gy + Math.sin(a - .1) * s * .12); }
+    ctx.fill(); ctx.shadowBlur = 0;
+  }
+}
+
+// ---------- render ----------
+const clipPlane = [new THREE.Plane(V(0, 1, 0), 0)];
+const bias = new THREE.Matrix4().set(.5, 0, 0, .5, 0, .5, 0, .5, 0, 0, .5, .5, 0, 0, 0, 1);
+function render(t) {
+  const cut = cutAt(t), lt = t - cut.a, u = clamp(lt / (cut.b - cut.a));
+  S = newState();
+  for (const k in CH) { CH[k].root.visible = false; CH[k].eyeOpen = 1; }
+  for (const o of fxObjs) o.visible = false;
+  inkU.uInkR.value = 0; inkU.uWaveR.value = -100; inkU.uT.value = t;
+  cars.forEach(c => { c.g.visible = t < 8.4; c.g.position.set(c.x, 0, c.z); c.g.rotation.set(0, c.r, 0); });
+  rubble.forEach(m => { const d = m.userData; m.visible = t < 8.4; m.position.set(d.x, d.s * .6, d.z); m.rotation.set(0, d.sp * 3, 0); });
+  bHalves.forEach(h => { h.position.set(0, 0, 0); h.rotation.set(0, 0, 0); });
+  cut.f(lt, u, t);
+
+  // lights follow the shot
+  const vd = S.subj.clone().sub(camera.position).normalize();
+  rim.color.set(S.rimC); rim.intensity = S.rimI; rim.target.position.copy(S.subj); rim.position.copy(S.subj).addScaledVector(vd, 10).add(V(0, 4, 0));
+  camL.target.position.copy(S.subj); camL.position.copy(camera.position).add(V(0, 2, 0));
+  for (const n of neon) { const r = rng(Math.floor(t * 12) + Math.floor(n.seed * 100)); const fl = n.blink ? (Math.floor(t * 1.5) % 2 ? 1 : .05) : (r() < .04 ? .25 : 1); n.m.material.color.copy(n.base).multiplyScalar(fl); }
+  for (const tr of traffic) { const s = mod(tr.off + t * tr.spd, 400) - 200; tr.s.position.set(tr.ax ? s : tr.lane, tr.y, tr.ax ? tr.lane : s); }
+  rain.fire(t, camera.position, S.rainSlow); splash.material.uniforms.uT.value = t; splash.material.uniforms.uS.value = RH * .5;
+  sky.position.copy(camera.position);
+  moonRing.position.copy(camera.position).addScaledVector(MOON, 700); moonDisc.position.copy(moonRing.position);
+
+  if (S.fade < 1) {
+    // mirror pass
+    mirrorCam.copy(camera); mirrorCam.layers.set(0);
+    const p = camera.position; mirrorCam.position.set(p.x, -p.y, p.z);
+    const look = V(0, 0, -1).applyQuaternion(camera.quaternion).add(p); look.y = -look.y;
+    const up = V(0, 1, 0).applyQuaternion(camera.quaternion); up.y = -up.y;
+    mirrorCam.up.copy(up); mirrorCam.lookAt(look); mirrorCam.updateMatrixWorld(); mirrorCam.projectionMatrix.copy(camera.projectionMatrix); mirrorCam.projectionMatrixInverse.copy(camera.projectionMatrixInverse);
+    texMat.copy(bias).multiply(mirrorCam.projectionMatrix).multiply(mirrorCam.matrixWorldInverse);
+    floor.visible = false; sky.position.copy(mirrorCam.position);
+    renderer.clippingPlanes = clipPlane; renderer.setRenderTarget(rtRef); renderer.clear(); renderer.render(scene, mirrorCam);
+    renderer.clippingPlanes = []; floor.visible = true; sky.position.copy(camera.position);
+    renderer.setRenderTarget(rtScene); renderer.clear(); renderer.render(scene, camera);
+    // bloom
+    brightMat.uniforms.t.value = rtScene.texture; pass(brightMat, rtA);
+    const bw = 1 / rtA.width, bh = 1 / rtA.height;
+    for (const sp of [1, 2.4]) { blurMat.uniforms.t.value = rtA.texture; blurMat.uniforms.dir.value.set(bw * sp, 0); pass(blurMat, rtB); blurMat.uniforms.t.value = rtB.texture; blurMat.uniforms.dir.value.set(0, bh * sp); pass(blurMat, rtA); }
+  }
+  const cu = compMat.uniforms;
+  cu.uBloom.value = S.bloom * 1.1; cu.uFlash.value = RM ? S.flash * .3 : S.flash; cu.uFlashC.value.copy(S.flashC); cu.uFade.value = S.fade; cu.uAb.value = RM ? .002 : S.ab; cu.uT.value = t; cu.uTint.value.copy(S.tint);
+  cu.uAsp.value = camera.aspect;
+  if (S.lens && !RM) { _p.copy(S.lens).project(camera); cu.uLens.value.set((_p.x + 1) / 2, (_p.y + 1) / 2); cu.uLensS.value = S.lensS; } else cu.uLensS.value = 0;
+  pass(compMat, null);
+  drawFX(S.fx, t);
+  const tk = S.title;
+  titleEl.style.opacity = tk > 0 ? (sstep(.1, .75, tk) * (1 - (tk > 0 ? 0 : 1))).toFixed(3) : 0;
+  titleEl.style.letterSpacing = ''; titleEl.firstElementChild.style.filter = tk > 0 ? `blur(${(4 * (1 - sstep(.1, .8, tk))).toFixed(2)}px)` : '';
+  return cut;
+}
+
+// ---------- sound ----------
+let AC = null, master, NB, rainSrc = null, rainGain, soundOn = false;
+function initAudio() {
+  AC = new (window.AudioContext || window.webkitAudioContext)();
+  const comp = AC.createDynamicsCompressor(); master = AC.createGain(); master.gain.value = .55; master.connect(comp); comp.connect(AC.destination);
+  NB = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate); const d = NB.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  rainSrc = AC.createBufferSource(); rainSrc.buffer = NB; rainSrc.loop = true; const f = AC.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 2600; f.Q.value = .6;
+  rainGain = AC.createGain(); rainGain.gain.value = 0; rainSrc.connect(f); f.connect(rainGain); rainGain.connect(master); rainSrc.start();
+}
+function env(g, t0, dur, peak) { g.gain.setValueAtTime(.0001, t0); g.gain.exponentialRampToValueAtTime(peak, t0 + Math.min(.02, dur * .2)); g.gain.exponentialRampToValueAtTime(.0001, t0 + dur); }
+function noise(t0, dur, type, f0, f1, peak, q = 1) { const s = AC.createBufferSource(); s.buffer = NB; const f = AC.createBiquadFilter(); f.type = type; f.Q.value = q; f.frequency.setValueAtTime(f0, t0); f.frequency.exponentialRampToValueAtTime(f1, t0 + dur); const g = AC.createGain(); env(g, t0, dur, peak); s.connect(f); f.connect(g); g.connect(master); s.start(t0); s.stop(t0 + dur + .05); }
+function tone(t0, dur, type, f0, f1, peak) { const o = AC.createOscillator(); o.type = type; o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(f1, t0 + dur); const g = AC.createGain(); env(g, t0, dur, peak); o.connect(g); g.connect(master); o.start(t0); o.stop(t0 + dur + .05); }
+const SFX = {
+  kick: t => { tone(t, .35, 'sine', 130, 40, .9); noise(t, .05, 'lowpass', 3000, 400, .3); },
+  step: t => { noise(t, .18, 'bandpass', 1800, 600, .5, 2); tone(t, .12, 'sine', 90, 50, .4); },
+  ring: t => { noise(t, .5, 'bandpass', 400, 5000, .7, 3); tone(t, .5, 'triangle', 1400, 2400, .08); },
+  wire: t => { tone(t, .35, 'sawtooth', 2400, 5200, .05); noise(t, .2, 'highpass', 4000, 9000, .5); },
+  hit: t => { tone(t, .6, 'sine', 120, 30, 1); noise(t, .4, 'lowpass', 5000, 150, .8); },
+  grav: t => { tone(t, 1.1, 'sine', 55, 30, .9); tone(t, 1.1, 'sawtooth', 110, 55, .06); },
+  sonar: t => { [880, 1320, 1760].forEach((f, i) => tone(t + i * .08, .6, 'sine', f, f * .98, .12)); },
+  swell: t => { noise(t, 1.1, 'lowpass', 200, 3000, .6); tone(t, 1.1, 'sawtooth', 40, 80, .1); },
+  final: t => { tone(t, 1.5, 'sine', 80, 25, 1); noise(t, 1.2, 'lowpass', 6000, 60, .9); tone(t, 2.4, 'sine', 55, 54, .25); }
+};
+const EV = [[1.62, 'step'], [3.0, 'kick'], [3.55, 'ring'], [4.3, 'kick'], [5.2, 'kick'], [5.72, 'wire'], [6.0, 'hit'], [6.3, 'kick'], [7.2, 'grav'], [8.4, 'kick'], [8.6, 'sonar'], [9.2, 'sonar'], [10.3, 'kick'], [11.3, 'swell'], [12.5, 'kick'], [13.0, 'kick'], [13.9, 'final']];
+function sfxBetween(a, b) { if (!soundOn || !AC || b - a > .5) return; for (const [et, n] of EV) if (a < et && et <= b) SFX[n](AC.currentTime + .01); }
+
+// ---------- UI ----------
+const tcf = t => `${Math.floor(t)}+${String(Math.floor((t % 1) * 24)).padStart(2, '0')}`;
+const playBtn = document.getElementById('play'), scrub = document.getElementById('scrub'), tcEl = document.getElementById('tc'), nowEl = document.getElementById('now'), replay = document.getElementById('replay'), sndBtn = document.getElementById('snd');
+const cutsEl = document.getElementById('cuts'), cutBtns = {};
+for (const c of CUTS) { const li = document.createElement('li'), b = document.createElement('button'); b.style.setProperty('--c', `var(--${c.col})`); b.innerHTML = `<span class="no">${c.id} · ${tcf(c.a)}</span>`; b.append(c.name); b.addEventListener('click', () => seek(c.a + .001)); li.append(b); cutsEl.append(li); cutBtns[c.id] = b; }
+let T = RM ? 12.9 : 0, playing = !RM, dirty = true, activeCut = null, last = performance.now();
+function setPlaying(p) { playing = p; playBtn.textContent = p ? '❚❚' : '▶'; playBtn.setAttribute('aria-label', p ? '一時停止' : '再生'); replay.hidden = !(T >= DUR && !p); if (rainGain) rainGain.gain.value = p && soundOn ? .1 : 0; dirty = true; }
+function seek(t) { T = clamp(t, 0, DUR); dirty = true; replay.hidden = true; }
+playBtn.addEventListener('click', () => { if (!playing && T >= DUR) T = 0; setPlaying(!playing); });
+document.getElementById('restart').addEventListener('click', () => { seek(0); setPlaying(true); });
+replay.addEventListener('click', () => { seek(0); setPlaying(true); });
+scrub.addEventListener('input', () => seek(+scrub.value));
+sndBtn.addEventListener('click', () => {
+  if (!AC) { try { initAudio(); } catch (e) { sndBtn.textContent = 'サウンド 利用不可'; return; } }
+  if (AC.state === 'suspended') AC.resume();
+  soundOn = !soundOn; sndBtn.setAttribute('aria-pressed', soundOn); sndBtn.textContent = soundOn ? 'サウンド オン' : 'サウンド オフ'; setPlaying(playing);
+});
+document.addEventListener('keydown', e => { if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); playBtn.click(); } });
+
+let RW = 1, RH = 1;
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight; renderer.setSize(w, h, false);
+  RW = Math.max(2, Math.round(w * PR)); RH = Math.max(2, Math.round(h * PR));
+  rtScene.setSize(RW, RH); rtRef.setSize(RW >> 1, RH >> 1); rtA.setSize(RW >> 2, RH >> 2); rtB.setSize(RW >> 2, RH >> 2);
+  fxc.width = RW; fxc.height = RH; camera.aspect = w / Math.max(1, h); dirty = true;
+}
+new ResizeObserver(resize).observe(stage); resize();
+setPlaying(playing);
+
+function loop(now) {
+  const dt = Math.min(.1, (now - last) / 1000); last = now;
+  if (playing) { const prev = T; T = Math.min(DUR, T + dt); sfxBetween(prev, T); if (T >= DUR) setPlaying(false); dirty = true; }
+  if (dirty) {
+    const cut = render(Math.min(T, DUR - .001)); dirty = false;
+    if (document.activeElement !== scrub) scrub.value = T.toFixed(2);
+    tcEl.innerHTML = `<b>${tcf(T)}</b> / 15+00`;
+    if (cut !== activeCut) { if (activeCut) cutBtns[activeCut.id].classList.remove('on'); cutBtns[cut.id].classList.add('on'); activeCut = cut; nowEl.innerHTML = `<b>${cut.id}</b>${cut.name}`; }
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+window.__noctisSeek = t => { seek(t); setPlaying(false); };
+})();
+</script>
