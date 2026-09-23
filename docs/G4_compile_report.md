@@ -57,6 +57,29 @@ The binary itself is deliberately not committed: the repository stays source
 plus manifests, and `EA_hash` is what ties a G3 run to the executable that
 produced it.
 
+## Line endings: the MetaEditor copy hashes differently, and that is expected
+
+The operator's MetaEditor working copy of `src/G3_ResearchEA.mq5` was supplied
+on 2026-09-23. It is **content-identical** to the repository file: 1441 lines,
+same bytes once CRLF is normalised to LF, `#property version "1.000"` present.
+
+| form | line endings | SHA-256 |
+|---|---|---|
+| repository (canonical) | LF | `e69558adde2af9ed81da3b2f67573876d85c521e60377e2dfa0988432e8aae71` |
+| MetaEditor working copy | CRLF | `dfc71f9c74ea6b25d9029c3e0928c292cc3d20f94196848c12e9c0efd4ff28d5` |
+
+`source_hash` is a byte hash of the files as the repository stores them, which
+is LF. MetaEditor saves CRLF, so a checkout opened and saved in MetaEditor will
+hash differently while being the same source. This is recorded here and in
+`metaeditor_compile.compiled_working_copy` so that an auditor comparing digests
+does not read a line-ending difference as source drift.
+
+If a single byte-exact digest across both worlds is wanted, the hashing rule
+can be changed to normalise newlines before hashing. That would re-issue
+`source_hash` and `release_hash`, so it is left as an explicit decision rather
+than done silently; `EA_hash` would remain valid either way, because the
+compiled content is unchanged.
+
 ## Hashes of the compiled tree
 
 ```

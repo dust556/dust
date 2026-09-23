@@ -54,6 +54,20 @@ COMPILE = {
         "metadata only, no strategy logic, parameter, risk or Addendum "
         "behaviour is affected"
     ),
+    # The operator's MetaEditor working copy of the main file was supplied on
+    # 2026-09-23. It is byte-identical to the repository file once CRLF is
+    # normalised to LF, so the compiled binary corresponds to this source.
+    # Both digests are recorded because an auditor hashing the MetaEditor copy
+    # would otherwise see a mismatch that does not exist in the content.
+    "compiled_working_copy": {
+        "file": "src/G3_ResearchEA.mq5",
+        "line_endings": "CRLF (MetaEditor default)",
+        "sha256_as_supplied":
+            "dfc71f9c74ea6b25d9029c3e0928c292cc3d20f94196848c12e9c0efd4ff28d5",
+        "sha256_repository_form_lf":
+            "e69558adde2af9ed81da3b2f67573876d85c521e60377e2dfa0988432e8aae71",
+        "content_identical_after_newline_normalisation": True,
+    },
 }
 
 # Filled in by tools/record_ea_hash.py once the compiled binary (or its
@@ -137,6 +151,10 @@ def main():
             "The value is confirmed against the hash table printed in the G3 "
             "research start record.",
             "No Final Holdout data, path or artifact is referenced anywhere.",
+            "source_hash is a byte hash of the repository files as stored, which "
+            "use LF line endings. A MetaEditor working copy normally uses CRLF "
+            "and therefore hashes differently while being the same source; see "
+            "metaeditor_compile.compiled_working_copy.",
         ],
     }
     for group, (folder, exts) in GROUPS.items():

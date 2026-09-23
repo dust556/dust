@@ -2,7 +2,7 @@
   "artifact": "G3 Research EA",
   "spec_authority": "Master Specification v0.4",
   "ea_version": "0.4.0-research",
-  "generated_utc": "2026-09-23T01:48:46Z",
+  "generated_utc": "2026-09-23T01:58:16Z",
   "groups": {
     "source": {
       "src/ExitManager.mqh": "93466d9b5e2435d3d396d37ea70ff75db56f705891f3ecc5c6a36a4f7d2808f8",
@@ -41,7 +41,7 @@
       "tests/unit_test_plan.md": "ee4c3ed8c2ad1a127624e7c1b4eaacb0004a27f2a73be0aa51cab028002eb17d"
     },
     "tools": {
-      "tools/compute_hashes.py": "f1dc61d386fa80ec3f97dd3cde821e79c286d03022caaa1a7400f6bf7f1fbf75",
+      "tools/compute_hashes.py": "79084758fa4fa65e36176843d708cdf5aa1d27b0ecff3a5da55cfdbb14a5eb9f",
       "tools/g3research/__init__.py": "ac3154ca2466d655744c15261d99eca896cdfd87ab69d7dbcd4c2851a0bbc35f",
       "tools/g3research/data_intake.py": "e338f8d5e5fa02d368ee32ea45b31de0e780312696ddd6413718a8f6fb20a790",
       "tools/g3research/oat_pipeline.py": "689290ac7c184943168e140bd1318b1eebf7ad37ddadd1fea5c3792d1280ee2b",
@@ -60,7 +60,7 @@
     "config_hash": "37c820c795a23d9c30a11b19d8bd811f0bbd0c255819b86695a1c8dd1d2ebe5e",
     "schema_hash": "ea3f1e17364f26c73d5e1686db76d0eaec61bdfedf7f3151aa26bac3ac20a332",
     "tests_hash": "34c5c329d8cfd110f8f6ec879e181bacbf4ad29f12235acfe352a9022c6cec18",
-    "tools_hash": "b659ad39768f7de4aa9eaec428afa50aeee056b96425ec86947f51b685891539",
+    "tools_hash": "9a98687d45e98f82d45905014cb271c977bf193e89a039c740aadb9078e6e26f",
     "release_hash": "ea649bdb88e3becbd697d1d08162679f8f7cc1a6d6d940284c14845fb981f4a8"
   },
   "ea_hash": "7a51ce18f7ffc474bc615e688284de0441b6112f04ce8ea5691e3d77f5740a55",
@@ -72,7 +72,14 @@
     "reported_by": "operator",
     "reported_on": "2026-09-23",
     "verified_in_this_environment": false,
-    "source_change_for_compile": "#property version \"0.4\" -> \"1.000\" in src/G3_ResearchEA.mq5; metadata only, no strategy logic, parameter, risk or Addendum behaviour is affected"
+    "source_change_for_compile": "#property version \"0.4\" -> \"1.000\" in src/G3_ResearchEA.mq5; metadata only, no strategy logic, parameter, risk or Addendum behaviour is affected",
+    "compiled_working_copy": {
+      "file": "src/G3_ResearchEA.mq5",
+      "line_endings": "CRLF (MetaEditor default)",
+      "sha256_as_supplied": "dfc71f9c74ea6b25d9029c3e0928c292cc3d20f94196848c12e9c0efd4ff28d5",
+      "sha256_repository_form_lf": "e69558adde2af9ed81da3b2f67573876d85c521e60377e2dfa0988432e8aae71",
+      "content_identical_after_newline_normalisation": true
+    }
   },
   "spec_hash": "229f29920ee411cf008442f56a1061583fc564ad50c979c32bf7996ada7ff965",
   "addendum_hash": "fa107ac25d161253511a69b620ef70dd66677406abb539ad8031de2b680aa40c",
@@ -86,6 +93,7 @@
   "notes": [
     "ea_hash is the SHA-256 of the compiled G3_ResearchEA.ex5. The MetaEditor compile itself passed with 0 errors and 0 warnings as reported by the operator, but the binary was not supplied to this environment, so the hash is recorded only once tools/record_ea_hash.py has been given the file or its digest.",
     "spec_hash is the SHA-256 of the Master Specification v0.4 document. The value is confirmed against the hash table printed in the G3 research start record.",
-    "No Final Holdout data, path or artifact is referenced anywhere."
+    "No Final Holdout data, path or artifact is referenced anywhere.",
+    "source_hash is a byte hash of the repository files as stored, which use LF line endings. A MetaEditor working copy normally uses CRLF and therefore hashes differently while being the same source; see metaeditor_compile.compiled_working_copy."
   ]
 }
