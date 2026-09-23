@@ -90,6 +90,10 @@ smallcap backtest --missing-price-policy zero ...
 # 過去日付でのスクリーニング (その日に公開済みの数値のみ使用)
 smallcap screen --as-of 2024-06-30 --universe-file universe.txt --out out/
 
+# 条件を外して実行 (条件⑤を外すとForm 3/4/5の取得自体を省略し、
+# 全ユニバース実行が約8.4時間 -> 約12分になる)
+smallcap backtest --without insider --universe-file universe.txt ...
+
 # 閾値の変更 (感応度分析)
 smallcap screen --tickers ACME --set returns.min_roic=0.20 --set leverage.max_debt_to_ebitda=2.0
 

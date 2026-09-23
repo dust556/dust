@@ -196,3 +196,109 @@ class TestCli(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestWithoutFlag(unittest.TestCase):
+    """Skipping a condition must skip its fetching, not just its evaluation."""
+
+    def setUp(self):
+        self.fixtures = os.path.join(
+            os.path.dirname(__file__), "..", "data", "fixtures"
+        )
+
+    def parse(self, *extra):
+        return build_parser().parse_args(
+            ["screen", "--provider", "fixtures", *extra]
+        )
+
+    def test_selected_criteria_drops_the_named_condition(self):
+        from smallcap.cli import selected_criteria
+
+        criteria, excluded = selected_criteria(self.parse("--without", "insider"))
+        self.assertEqual(excluded, {"insider"})
+        self.assertNotIn("insider", [c.key for c in criteria])
+        self.assertEqual(len(criteria), 4)
+
+    def test_multiple_exclusions_are_repeatable(self):
+        from smallcap.cli import selected_criteria
+
+        criteria, excluded = selected_criteria(
+            self.parse("--without", "insider", "--without", "leverage")
+        )
+        self.assertEqual(excluded, {"insider", "leverage"})
+        self.assertEqual(len(criteria), 3)
+
+    def test_unknown_criterion_is_rejected_with_the_valid_keys(self):
+        from smallcap.cli import selected_criteria
+
+        with self.assertRaises(SystemExit) as caught:
+            selected_criteria(self.parse("--without", "insdier"))
+        self.assertIn("market_cap", str(caught.exception))
+
+    def test_excluding_everything_is_rejected(self):
+        from smallcap.cli import selected_criteria
+
+        args = self.parse(
+            *sum(
+                [["--without", k] for k in
+                 ["market_cap", "gross_margin", "returns", "leverage", "insider"]],
+                [],
+            )
+        )
+        with self.assertRaises(SystemExit):
+            selected_criteria(args)
+
+    def test_sec_provider_is_built_without_ownership_fetching(self):
+        from smallcap.cli import build_provider
+        from smallcap.providers.sec_edgar import SECEdgarProvider
+
+        args = build_parser().parse_args(
+            ["screen", "--provider", "sec", "--without", "insider"]
+        )
+        provider = build_provider(args, Config())
+        self.assertIsInstance(provider, SECEdgarProvider)
+        self.assertFalse(provider.fetch_insiders)
+
+        args = build_parser().parse_args(["screen", "--provider", "sec"])
+        self.assertTrue(build_provider(args, Config()).fetch_insiders)
+
+    def test_screen_reports_only_the_kept_conditions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            main([
+                "screen", "--provider", "fixtures", "--fixtures", self.fixtures,
+                "--tickers", "IDEAL", "--without", "insider",
+                "--out", directory, "--quiet",
+            ])
+            with open(os.path.join(directory, "results.json")) as handle:
+                payload = json.load(handle)
+            keys = [c["key"] for c in payload["results"][0]["criteria"]]
+            self.assertNotIn("insider", keys)
+            self.assertEqual(len(keys), 4)
+
+    def test_backtest_marks_a_partial_screen_prominently(self):
+        with tempfile.TemporaryDirectory() as directory:
+            main([
+                "backtest", "--provider", "fixtures", "--fixtures", self.fixtures,
+                "--start", "2022-01-01", "--end", "2026-03-31",
+                "--benchmark", "BIGCAP", "--without", "insider",
+                "--out", directory, "--quiet",
+            ])
+            with open(os.path.join(directory, "backtest.json")) as handle:
+                payload = json.load(handle)
+        # It must be the first thing a reader sees, ahead of survivorship.
+        self.assertIn("PARTIAL SCREEN", payload["biases"][0])
+        self.assertIn("not comparable to a full run", payload["biases"][0])
+
+    def test_dropping_a_condition_changes_the_backtest_result(self):
+        outputs = {}
+        for label, extra in (("full", []), ("partial", ["--without", "insider"])):
+            with tempfile.TemporaryDirectory() as directory:
+                main([
+                    "backtest", "--provider", "fixtures", "--fixtures", self.fixtures,
+                    "--start", "2022-01-01", "--end", "2026-03-31",
+                    "--benchmark", "BIGCAP", *extra,
+                    "--out", directory, "--quiet",
+                ])
+                with open(os.path.join(directory, "backtest.json")) as handle:
+                    outputs[label] = json.load(handle)["stats"]["cagr"]
+        self.assertNotAlmostEqual(outputs["full"], outputs["partial"])

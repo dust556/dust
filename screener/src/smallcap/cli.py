@@ -63,6 +63,23 @@ def build_config(args: argparse.Namespace) -> Config:
     return config
 
 
+def selected_criteria(args: argparse.Namespace):
+    """The criteria to evaluate, honouring any --without exclusions."""
+    from .criteria import ALL_CRITERIA, CRITERION_KEYS
+
+    excluded = {k.strip() for k in (getattr(args, "without", None) or [])}
+    unknown = excluded - set(CRITERION_KEYS)
+    if unknown:
+        raise SystemExit(
+            f"unknown criterion in --without: {', '.join(sorted(unknown))}. "
+            f"Valid keys: {', '.join(CRITERION_KEYS)}"
+        )
+    kept = [c for c in ALL_CRITERIA if c.key not in excluded]
+    if not kept:
+        raise SystemExit("--without excluded every criterion; nothing left to screen")
+    return kept, excluded
+
+
 def build_provider(args: argparse.Namespace, config: Config):
     name = getattr(args, "provider", "sec")
     if name in ("fixtures", "fixture"):
@@ -82,7 +99,15 @@ def build_provider(args: argparse.Namespace, config: Config):
         prices_dir=getattr(args, "prices_dir", None),
         allow_network=not getattr(args, "no_price_network", False),
     )
-    return SECEdgarProvider(config, http=http, price_provider=prices)
+    # Skip the ownership filings entirely when the criterion that needs them
+    # is not being evaluated -- they dominate a full-universe run's duration.
+    _, excluded = selected_criteria(args)
+    return SECEdgarProvider(
+        config,
+        http=http,
+        price_provider=prices,
+        fetch_insiders="insider" not in excluded,
+    )
 
 
 def _check_user_agent(config: Config) -> None:
@@ -133,7 +158,14 @@ def cmd_screen(args: argparse.Namespace) -> int:
     if args.limit:
         tickers = tickers[: args.limit]
 
-    engine = ScreeningEngine(provider, config)
+    criteria, excluded = selected_criteria(args)
+    if excluded and not args.quiet:
+        print(
+            f"note: screening without {', '.join(sorted(excluded))}; "
+            "those conditions are neither evaluated nor reported",
+            file=sys.stderr,
+        )
+    engine = ScreeningEngine(provider, config, criteria=criteria)
 
     def progress(done: int, total: int, result) -> None:
         if args.quiet:
@@ -193,7 +225,8 @@ def cmd_explain(args: argparse.Namespace) -> int:
     provider = build_provider(args, config)
     if args.provider not in ("fixtures", "fixture"):
         _check_user_agent(config)
-    engine = ScreeningEngine(provider, config)
+    criteria, _ = selected_criteria(args)
+    engine = ScreeningEngine(provider, config, criteria=criteria)
     result = engine.screen_one(args.ticker)
 
     if args.json:
@@ -247,6 +280,12 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     if args.limit:
         tickers = tickers[: args.limit]
 
+    criteria, excluded = selected_criteria(args)
+    if excluded and not args.quiet:
+        print(
+            f"note: backtesting without {', '.join(sorted(excluded))}",
+            file=sys.stderr,
+        )
     tester = Backtester(provider, config, backtest)
 
     def progress(done: int, total: int, period) -> None:
@@ -259,8 +298,15 @@ def cmd_backtest(args: argparse.Namespace) -> int:
             flush=True,
         )
 
-    periods = tester.run(tickers, progress=progress)
+    periods = tester.run(tickers, criteria=criteria, progress=progress)
     result = tester.analyse(periods, factor_data=factor_data)
+    if excluded:
+        result.biases.insert(
+            0,
+            "PARTIAL SCREEN: this run excluded "
+            f"{', '.join(sorted(excluded))}. It does not measure the five-condition "
+            "screen and its result is not comparable to a full run.",
+        )
 
     if args.ablation:
         if not args.quiet:
@@ -443,6 +489,14 @@ def _add_common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--user-agent", help="User-Agent for SEC requests")
     parser.add_argument("--cache-dir", help="HTTP cache directory")
     parser.add_argument("--workers", type=int, help="parallel fetch workers")
+    parser.add_argument(
+        "--without",
+        action="append",
+        metavar="CRITERION",
+        help="skip a condition (market_cap, gross_margin, returns, leverage, "
+        "insider); repeatable. Excluding 'insider' also skips fetching the "
+        "Form 3/4/5 filings, which are the bulk of a full-universe run",
+    )
     parser.add_argument(
         "-v", "--verbose", action="store_true", help="debug logging"
     )

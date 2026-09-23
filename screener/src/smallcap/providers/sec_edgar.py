@@ -88,8 +88,15 @@ class SECEdgarProvider:
         http: Optional[HttpClient] = None,
         price_provider: Any = None,
         offline: bool = False,
+        fetch_insiders: bool = True,
     ):
         self.config = config
+        # Ownership filings are ~95% of the requests a full-universe run
+        # makes: one companyfacts document per company against dozens of
+        # Form 4 XMLs. When the insider criterion is not being evaluated,
+        # fetching them is pure cost, and skipping them turns a multi-hour
+        # job into a short one.
+        self.fetch_insiders = fetch_insiders
         self.http = http or HttpClient(
             user_agent=config.user_agent,
             cache_dir=config.cache_dir,
@@ -211,6 +218,14 @@ class SECEdgarProvider:
 
         ownership_rows: List[Dict[str, Any]] = []
         ownership_error: Optional[str] = None
+        if not self.fetch_insiders:
+            return RawCompany(
+                ticker=ticker.upper(),
+                meta=meta,
+                facts=facts,
+                ownership_rows=[],
+                ownership_error="insider ownership was not requested for this run",
+            )
         try:
             ownership_rows = self._collect_ownership_rows(cik)
         except (HTTPError, ProviderError) as exc:
